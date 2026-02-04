@@ -1,0 +1,89 @@
+import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import crypto from "crypto";
+
+const UserSchema = new mongoose.Schema({
+    email: {
+        type: String,
+        required: [true, "Please provide an email"],
+        unique: true,
+        lowercase: true,
+        match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, "Please provide a valid email"]
+    },
+    password: {
+        type: String,
+        required: [true, "Please provide a password"],
+        minlength: 8,
+        select: false
+    },
+    companyName: {
+        type: String,
+        required: [true, "Please provide a company name"]
+    },
+    industry: {
+        type: String,
+        enum: ['Technology', 'Finance', 'Healthcare', 'Education', 'Retail', 'Other'],
+        required: [true, "Please provide an industry"]
+    },
+    companySize: {
+        type: String,
+        enum: ['1-10', '11-50', '51-200', '201-500', '501-1000', '1001+'],
+        required: [true, "Please provide company size"]
+    },
+    isEmailVerified: {
+        type: Boolean,
+        default: false
+    },
+    emailVerificationToken: String,
+    emailVerificationExpires: Date,
+    resetPasswordToken: String,
+    resetPasswordExpires: Date,
+    createdAt: {
+        type: Date,
+        default: Date.now
+    }
+});
+
+// Hash password before saving
+UserSchema.pre('save', async function() {
+    if (!this.isModified('password')) return;
+    
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+});
+
+// Compare password
+UserSchema.methods.comparePassword = async function(plainPassword) {
+    return await bcrypt.compare(plainPassword, this.password);
+};
+
+// Generate JWT token
+UserSchema.methods.getSignedJwtToken = function() {
+    return jwt.sign({ id: this._id }, process.env.JWT_SECRET, {
+        expiresIn: process.env.JWT_EXPIRES_IN
+    });
+};
+
+// Generate email verification token
+UserSchema.methods.generateEmailVerificationToken = function() {
+    const verificationToken = crypto.randomBytes(20).toString('hex');
+    this.emailVerificationToken = crypto.createHash('sha256').update(verificationToken).digest('hex');
+    this.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000;
+    return verificationToken;
+};
+
+// Generate reset password token
+UserSchema.methods.generateResetPasswordToken = function() {
+    const resetToken = crypto.randomBytes(20).toString('hex');
+    this.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    this.resetPasswordExpires = Date.now() + 60 * 60 * 1000;
+    return resetToken;
+};
+
+export default mongoose.model("User", UserSchema);
+
+
+
+
+

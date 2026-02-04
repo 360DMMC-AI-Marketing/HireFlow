@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useForm } from "react-hook-form";
+import { useNavigate } from "react-router-dom";
 import { Mail, Lock, Building2, Users2, Globe, ChevronRight, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -25,7 +26,8 @@ const COMPANY_SIZES = [
   "500+"
 ];
 
-export const SignupPage = ({ onSwitch, onSignup }) => {
+export const SignupPage = () => {
+  const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [password, setPassword] = useState("");
   const { register, handleSubmit, formState: { errors, isSubmitting }, trigger, watch } = useForm();
@@ -262,7 +264,7 @@ export const SignupPage = ({ onSwitch, onSignup }) => {
 
       <p className="mt-8 text-center text-sm font-medium text-slate-500">
         Already registered?{" "}
-        <button type="button" onClick={onSwitch} className="text-[#061446] font-black uppercase tracking-wider hover:underline ml-1">
+        <button type="button" onClick={() => navigate('/login')} className="text-[#061446] font-black uppercase tracking-wider hover:underline ml-1">
           Login here
         </button>
       </p>

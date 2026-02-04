@@ -20,5 +20,4 @@ router.post('/api/billing/update-payment-method', (req, res) => {
 router.get('/api/billing/invoices', (req, res) => {
     res.send('Billing Invoices API is working');
 }   );
-router.post('/')
 export default router;

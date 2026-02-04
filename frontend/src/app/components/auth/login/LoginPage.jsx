@@ -3,14 +3,19 @@ import { useForm } from "react-hook-form";
 import { Mail, Lock, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "../shared/Input";
+import { useNavigate } from 'react-router-dom';
 
-export const LoginPage = ({ onSwitch, onLogin }) => {
+export const LoginPage = () => {
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm();
+  const navigate = useNavigate();
 
   const onSubmit = async (data) => {
     await new Promise(resolve => setTimeout(resolve, 1500));
+    // Store mock token for demonstration
+    localStorage.setItem('authToken', 'mock-token-' + Date.now());
+    localStorage.setItem('user', JSON.stringify({ email: data.email, name: 'Jordan Smith' }));
     toast.success("Welcome back to HireFlow!");
-    onLogin();
+    navigate('/dashboard');
   };
 
   return (
@@ -39,7 +44,11 @@ export const LoginPage = ({ onSwitch, onLogin }) => {
           <input type="checkbox" className="w-4 h-4 rounded border-slate-200 text-[#061446] focus:ring-[#C1DCE2]" />
           <span className="text-xs font-bold text-slate-500">Remember me</span>
         </label>
-        <button type="button" className="text-xs font-black uppercase tracking-wider text-[#061446] hover:text-slate-600 transition-colors">
+        <button 
+          type="button" 
+          className="text-xs font-black uppercase tracking-wider text-[#061446] hover:text-slate-600 transition-colors"
+          onClick={() => navigate('/forgot-password')}
+        >
           Forgot Password?
         </button>
       </div>
@@ -53,7 +62,11 @@ export const LoginPage = ({ onSwitch, onLogin }) => {
 
       <p className="mt-8 text-center text-sm font-medium text-slate-500">
         New to HireFlow?{" "}
-        <button type="button" onClick={onSwitch} className="text-[#061446] font-black uppercase tracking-wider hover:underline ml-1">
+        <button 
+          type="button" 
+          onClick={() => navigate('/signup')} 
+          className="text-[#061446] font-black uppercase tracking-wider hover:underline ml-1"
+        >
           Create Account
         </button>
       </p>

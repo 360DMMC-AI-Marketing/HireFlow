@@ -1,16 +1,19 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Mail, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-export const EmailVerificationView = ({ onComplete }) => {
+export const EmailVerificationView = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
   const handleVerify = () => {
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
+      localStorage.setItem('authToken', 'mock-token-' + Date.now());
       toast.success("Email verified! Welcome to the platform.");
-      onComplete();
+      navigate('/dashboard');
     }, 2000);
   };
 

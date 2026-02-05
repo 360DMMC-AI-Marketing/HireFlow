@@ -15,7 +15,7 @@ export const LoginPage = () => {
     setIsLoading(true);
     try {
       const response = await login(data.email, data.password);
-      localStorage.setItem('authToken', response.token);
+      // Token is already stored by authService.login()
       localStorage.setItem('user', JSON.stringify(response.user));
       toast.success("Welcome back to HireFlow!");
       navigate('/dashboard');

@@ -11,6 +11,9 @@ import { ProtectedRoute } from "@/pages/auth/ProtectedRoute";
 import { DashboardLayout } from "@/pages/dashboard/layout/DashboardLayout";
 import { OverviewView } from "@/pages/dashboard/views/OverviewView";
 import { JobsView } from "@/pages/dashboard/views/JobsView";
+import CreateJob from "@/pages/dashboard/jobs/CreateJob";
+import JobDetail from "@/pages/dashboard/jobs/JobDetail";
+import UserProfile from "@/pages/dashboard/settings/UserProfile";
 import { CandidatesView } from "@/pages/dashboard/views/CandidatesView";
 import { InterviewsView } from "@/pages/dashboard/views/InterviewsView";
 import { AIVideoView } from "@/pages/dashboard/views/AIVideoView";
@@ -61,10 +64,15 @@ export default function HireFlowDashboard() {
         }>
           <Route index element={<OverviewView dashboardStats={DASHBOARD_STATS} analyticsData={ANALYTICS_DATA} recentCandidates={RECENT_CANDIDATES} />} />
           <Route path="jobs" element={<JobsView />} />
+          <Route path="jobs/create" element={<CreateJob />} />
+          <Route path="jobs/:id" element={<JobDetail />} />
+          <Route path="jobs/:id/edit" element={<CreateJob />} />
           <Route path="candidates" element={<CandidatesView />} />
           <Route path="interviews" element={<InterviewsView />} />
           <Route path="ai-video" element={<AIVideoView />} />
           <Route path="analytics" element={<AnalyticsView analyticsData={ANALYTICS_DATA} />} />
+          <Route path="profile" element={<UserProfile />} />
+          <Route path="settings" element={<UserProfile />} />
         </Route>
         
         {/* Default redirect */}

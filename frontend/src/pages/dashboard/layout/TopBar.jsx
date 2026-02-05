@@ -6,9 +6,19 @@ import { ImageWithFallback } from "@/components/figma/ImageWithFallback";
 export const TopBar = ({ onMenuClick }) => {
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = React.useState(false);
+  
+  // Get user from localStorage
+  const user = React.useMemo(() => {
+    try {
+      const userData = localStorage.getItem('user');
+      return userData ? JSON.parse(userData) : null;
+    } catch (error) {
+      return null;
+    }
+  }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('authToken');
+    localStorage.removeItem('token');
     localStorage.removeItem('user');
     navigate('/login');
   };
@@ -52,13 +62,15 @@ export const TopBar = ({ onMenuClick }) => {
             onClick={() => setShowUserMenu(!showUserMenu)}
           >
             <ImageWithFallback 
-              src="https://images.unsplash.com/photo-1769636929261-e913ed023c83?q=80&w=100" 
+              src={user?.profilePicture || "https://images.unsplash.com/photo-1769636929261-e913ed023c83?q=80&w=100"} 
               alt="Profile" 
               className="w-10 h-10 rounded-xl object-cover ring-2 ring-white shadow-md shadow-slate-200"
             />
             <div className="text-left hidden sm:block">
-              <p className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">Jordan Smith</p>
-              <p className="text-xs text-slate-500">Admin</p>
+              <p className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                {user?.companyName || user?.email?.split('@')[0] || 'User'}
+              </p>
+              <p className="text-xs text-slate-500">{user?.role || 'Admin'}</p>
             </div>
             <ChevronDown className={`w-4 h-4 text-slate-400 hidden sm:block transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
           </div>
@@ -72,8 +84,10 @@ export const TopBar = ({ onMenuClick }) => {
               />
               <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50">
                 <div className="px-4 py-3 border-b border-slate-100">
-                  <p className="text-sm font-bold text-slate-900">Jordan Smith</p>
-                  <p className="text-xs text-slate-500">jordan@company.com</p>
+                  <p className="text-sm font-bold text-slate-900">
+                    {user?.companyName || user?.email?.split('@')[0] || 'User'}
+                  </p>
+                  <p className="text-xs text-slate-500">{user?.email || 'user@company.com'}</p>
                 </div>
                 <button 
                   onClick={() => {

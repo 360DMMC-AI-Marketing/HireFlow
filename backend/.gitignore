@@ -1,0 +1,10 @@
+node_modules/
+.env
+.env.local
+logs/*.log
+assets/uploads/resumes/*
+!assets/uploads/resumes/.gitkeep
+assets/uploads/company-logos/*
+!assets/uploads/company-logos/.gitkeep
+assets/uploads/profile-pictures/*
+!assets/uploads/profile-pictures/.gitkeep

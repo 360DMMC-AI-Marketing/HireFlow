@@ -78,7 +78,7 @@ function TableHead({ className, ...props }) {
   );
 }
 
-function TableCell({ ...props }) {
+function TableCell({ className, ...props }) {
   return (
     <td
       data-slot="table-cell"

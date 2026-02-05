@@ -10,22 +10,26 @@ function DropdownMenu({ ...props }) {
   return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />;
 }
 
-function DropdownMenuPortal({ ...props }) {
+function DropdownMenuPortal({ children, ...props }) {
   return (
-    <DropdownMenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props} />
+    <DropdownMenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props}>
+      {children}
+    </DropdownMenuPrimitive.Portal>
   );
 }
 
-function DropdownMenuTrigger({ ...props }) {
+function DropdownMenuTrigger({ className, asChild, ...props }) {
   return (
     <DropdownMenuPrimitive.Trigger
+      asChild={asChild}
       data-slot="dropdown-menu-trigger"
+      className={className}
       {...props}
     />
   );
 }
 
-function DropdownMenuContent({ ...props }) {
+function DropdownMenuContent({ className, sideOffset = 4, ...props }) {
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
@@ -47,7 +51,7 @@ function DropdownMenuGroup({ ...props }) {
   );
 }
 
-function DropdownMenuItem({ ...props }) {
+function DropdownMenuItem({ className, inset, variant, ...props }) {
   return (
     <DropdownMenuPrimitive.Item
       data-slot="dropdown-menu-item"
@@ -62,7 +66,7 @@ function DropdownMenuItem({ ...props }) {
   );
 }
 
-function DropdownMenuCheckboxItem({ ...props }) {
+function DropdownMenuCheckboxItem({ className, children, checked, ...props }) {
   return (
     <DropdownMenuPrimitive.CheckboxItem
       data-slot="dropdown-menu-checkbox-item"
@@ -92,7 +96,7 @@ function DropdownMenuRadioGroup({ ...props }) {
   );
 }
 
-function DropdownMenuRadioItem({ ...props }) {
+function DropdownMenuRadioItem({ className, children, ...props }) {
   return (
     <DropdownMenuPrimitive.RadioItem
       data-slot="dropdown-menu-radio-item"
@@ -112,7 +116,7 @@ function DropdownMenuRadioItem({ ...props }) {
   );
 }
 
-function DropdownMenuLabel({ ...props }) {
+function DropdownMenuLabel({ className, inset, ...props }) {
   return (
     <DropdownMenuPrimitive.Label
       data-slot="dropdown-menu-label"
@@ -126,7 +130,7 @@ function DropdownMenuLabel({ ...props }) {
   );
 }
 
-function DropdownMenuSeparator({ ...props }) {
+function DropdownMenuSeparator({ className, ...props }) {
   return (
     <DropdownMenuPrimitive.Separator
       data-slot="dropdown-menu-separator"
@@ -136,7 +140,7 @@ function DropdownMenuSeparator({ ...props }) {
   );
 }
 
-function DropdownMenuShortcut({ ...props }) {
+function DropdownMenuShortcut({ className, ...props }) {
   return (
     <span
       data-slot="dropdown-menu-shortcut"
@@ -153,7 +157,7 @@ function DropdownMenuSub({ ...props }) {
   return <DropdownMenuPrimitive.Sub data-slot="dropdown-menu-sub" {...props} />;
 }
 
-function DropdownMenuSubTrigger({ ...props }) {
+function DropdownMenuSubTrigger({ className, inset, children, ...props }) {
   return (
     <DropdownMenuPrimitive.SubTrigger
       data-slot="dropdown-menu-sub-trigger"
@@ -170,7 +174,7 @@ function DropdownMenuSubTrigger({ ...props }) {
   );
 }
 
-function DropdownMenuSubContent({ ...props }) {
+function DropdownMenuSubContent({ className, ...props }) {
   return (
     <DropdownMenuPrimitive.SubContent
       data-slot="dropdown-menu-sub-content"

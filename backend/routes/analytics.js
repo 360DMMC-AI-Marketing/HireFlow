@@ -1,19 +1,27 @@
 import { Router } from "express";
-const router = Router();    
-router.get('/api/analytics/overview', (req, res) => {
-    res.send('Analytics API is working');
-}   );
+import {
+    getDashboardStats,
+    getApplicationVelocity,
+    getRecentCandidates,
+    getOverview,
+    getTierUsage,
+    getJobComparison,
+    getTopCandidates,
+    getActivity
+} from '../controllers/analyticscontroller.js';
 
-router.get('/api/analytics/tier-usage', (req, res) => {
-    res.send('Tier Usage API is working');
-}   );
-router.get('/api/analytics/job-comparison', (req, res) => {
-    res.send('Job Comparison API is working');
-}   );  
-router.get('/api/analytics/top-candidates', (req, res) => {
-    res.send('Top Candidates API is working');
-}   );
-router.get('/api/analytics/activity', (req, res) => {
-    res.send('Activity API is working');
-}   );  
+const router = Router();
+
+// Dashboard analytics endpoints
+router.get('/dashboard-stats', getDashboardStats);
+router.get('/application-velocity', getApplicationVelocity);
+router.get('/recent-candidates', getRecentCandidates);
+
+// Other analytics endpoints
+router.get('/api/analytics/overview', getOverview);
+router.get('/api/analytics/tier-usage', getTierUsage);
+router.get('/api/analytics/job-comparison', getJobComparison);
+router.get('/api/analytics/top-candidates', getTopCandidates);
+router.get('/api/analytics/activity', getActivity);
+
 export default router;  

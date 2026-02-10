@@ -4,6 +4,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Lock, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "../shared/Input";
+import axios from "axios";
 
 export const ResetPasswordPage = () => {
     const { token } = useParams();
@@ -16,14 +17,18 @@ export const ResetPasswordPage = () => {
             toast.error('Passwords do not match');
             return;
         }
+
         try {
-            // simulate API call
-            await new Promise((r) => setTimeout(r, 1000));
-            // normally you'd POST: { token, password: data.password }
-            toast.success('Password reset successfully');
-            navigate('/login');
+            const response = await axios.post(`http://localhost:5000/api/auth/reset-password/${token}`, {
+                password: data.password
+            });
+
+            if (response.data.success) {
+                toast.success('Password reset successfully! You can now login.');
+                navigate('/login');
+            }
         } catch (err) {
-            toast.error('Failed to reset password');
+            toast.error(err.response?.data?.error || 'Failed to reset password');
         }
     };
 

@@ -71,6 +71,8 @@ const UserSchema = new mongoose.Schema({
     emailVerificationExpires: Date,
     resetPasswordToken: String,
     resetPasswordExpires: Date,
+    resetPasswordCode: String,
+    resetPasswordCodeExpires: Date,
     createdAt: {
         type: Date,
         default: Date.now
@@ -111,6 +113,14 @@ UserSchema.methods.generateResetPasswordToken = function() {
     this.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
     this.resetPasswordExpires = Date.now() + 60 * 60 * 1000;
     return resetToken;
+};
+
+// Generate 6-digit verification code for password reset
+UserSchema.methods.generateResetPasswordCode = function() {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    this.resetPasswordCode = crypto.createHash('sha256').update(code).digest('hex');
+    this.resetPasswordCodeExpires = Date.now() + 15 * 60 * 1000; // 15 minutes
+    return code;
 };
 
 export default mongoose.models.User || mongoose.model("User", UserSchema);

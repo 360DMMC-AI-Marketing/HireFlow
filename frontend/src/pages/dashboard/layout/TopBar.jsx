@@ -1,10 +1,11 @@
 import React from "react";
 import { Search, Bell, ChevronDown, Menu } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { ImageWithFallback } from "@/components/figma/ImageWithFallback";
 
 export const TopBar = ({ onMenuClick }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [showUserMenu, setShowUserMenu] = React.useState(false);
 
   // Keep a local user state so TopBar can update reactively when profile changes
@@ -17,10 +18,25 @@ export const TopBar = ({ onMenuClick }) => {
     }
   });
 
+  // Force refresh user data from localStorage when location changes
+  React.useEffect(() => {
+    try {
+      const userData = localStorage.getItem('user');
+      if (userData) {
+        const parsed = JSON.parse(userData);
+        setUser(parsed);
+      }
+    } catch (error) {
+      console.error('Error refreshing user data:', error);
+    }
+  }, [location.pathname]);
+
   // Listen for user updates dispatched by profile page, and storage events
   React.useEffect(() => {
     const onUserUpdated = (e) => {
-      if (e?.detail) setUser(e.detail);
+      if (e?.detail) {
+        setUser(e.detail);
+      }
     };
 
     const onStorage = (ev) => {

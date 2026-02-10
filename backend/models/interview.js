@@ -1,5 +1,5 @@
 // Interview model
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const interviewSchema = new mongoose.Schema({
   // Add interview schema fields here
@@ -7,4 +7,4 @@ const interviewSchema = new mongoose.Schema({
   timestamps: true
 });
 
-module.exports = mongoose.model('Interview', interviewSchema);
+export default mongoose.model('Interview', interviewSchema);

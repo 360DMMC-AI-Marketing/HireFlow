@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
+import axios from "axios";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { TrendingUp } from "lucide-react";
+import { TrendingUp, Briefcase, Users, Calendar, UserCheck } from "lucide-react";
 import { 
   ResponsiveContainer,
   AreaChart,
@@ -13,12 +14,114 @@ import {
 } from "recharts";
 import { Card } from "../shared/Card";
 import { ImageWithFallback } from "@/components/figma/ImageWithFallback";
+import { DASHBOARD_STATS, ANALYTICS_DATA, RECENT_CANDIDATES } from "@/utils/data/dashboardData";
 
 function cn(...inputs) {
   return twMerge(clsx(inputs));
 }
 
-export const OverviewView = ({ dashboardStats, analyticsData, recentCandidates }) => (
+export const OverviewView = () => {
+  const [dashboardStats, setDashboardStats] = useState(DASHBOARD_STATS);
+  const [analyticsData, setAnalyticsData] = useState(ANALYTICS_DATA);
+  const [recentCandidates, setRecentCandidates] = useState(RECENT_CANDIDATES);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        // If no token, use fallback data
+        setLoading(false);
+        return;
+      }
+
+      const headers = { Authorization: `Bearer ${token}` };
+
+      // Fetch all dashboard data in parallel
+      const [statsRes, velocityRes, candidatesRes] = await Promise.all([
+        axios.get('http://localhost:5000/api/analytics/dashboard-stats', { headers }).catch(() => null),
+        axios.get('http://localhost:5000/api/analytics/application-velocity', { headers }).catch(() => null),
+        axios.get('http://localhost:5000/api/analytics/recent-candidates', { headers }).catch(() => null)
+      ]);
+
+      // Update dashboard stats
+      if (statsRes?.data?.success) {
+        const stats = statsRes.data.stats;
+        setDashboardStats([
+          { 
+            label: "Active Jobs", 
+            value: String(stats.activeJobs.value), 
+            change: stats.activeJobs.change, 
+            icon: Briefcase, 
+            color: "text-blue-600", 
+            bg: "bg-blue-50" 
+          },
+          { 
+            label: "New Applicants", 
+            value: String(stats.newApplicants.value), 
+            change: stats.newApplicants.change, 
+            icon: Users, 
+            color: "text-indigo-600", 
+            bg: "bg-indigo-50" 
+          },
+          { 
+            label: "Interviews", 
+            value: String(stats.interviews.value), 
+            change: stats.interviews.change, 
+            icon: Calendar, 
+            color: "text-purple-600", 
+            bg: "bg-purple-50" 
+          },
+          { 
+            label: "Hired", 
+            value: String(stats.hired.value), 
+            change: stats.hired.change, 
+            icon: UserCheck, 
+            color: "text-emerald-600", 
+            bg: "bg-emerald-50" 
+          }
+        ]);
+      }
+
+      // Update analytics data
+      if (velocityRes?.data?.success) {
+        setAnalyticsData(velocityRes.data.data);
+      }
+
+      // Update recent candidates
+      if (candidatesRes?.data?.success) {
+        setRecentCandidates(candidatesRes.data.candidates);
+      }
+
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      // Keep using fallback data on error
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-8 animate-in fade-in">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-32 bg-white rounded-2xl border border-slate-200 animate-pulse" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 h-96 bg-white rounded-2xl border border-slate-200 animate-pulse" />
+          <div className="h-96 bg-white rounded-2xl border border-slate-200 animate-pulse" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
   <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       {dashboardStats.map((stat, i) => (
@@ -98,4 +201,5 @@ export const OverviewView = ({ dashboardStats, analyticsData, recentCandidates }
       </Card>
     </div>
   </div>
-);
+  );
+};

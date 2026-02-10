@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
-import job from "./job";
+import job from "./job.js";
+
 const applicationSchema = new mongoose.Schema({
     candidate: {
         type: mongoose.Schema.Types.ObjectId,
@@ -19,4 +20,4 @@ const applicationSchema = new mongoose.Schema({
     },
 });
 
-module.exports = mongoose.model('Application', applicationSchema);
+export default mongoose.model('Application', applicationSchema);

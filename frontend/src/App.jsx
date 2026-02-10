@@ -17,8 +17,8 @@ import UserProfile from "@/pages/dashboard/profile/UserProfilePage";
 import { CandidatesView } from "@/pages/dashboard/views/CandidatesView";
 import { InterviewsView } from "@/pages/dashboard/views/InterviewsView";
 import { AIVideoView } from "@/pages/dashboard/views/AIVideoView";
-import { AnalyticsView } from "@/pages/dashboard/views/AnalyticsView";
-import { DASHBOARD_STATS, ANALYTICS_DATA, RECENT_CANDIDATES } from "@/utils/data/dashboardData";
+import { AnalyticsView } from "@/pages/dashboard/analytics/AnalyticsView.jsx";
+import { ANALYTICS_DATA } from "@/utils/data/dashboardData";
 
 export default function HireFlowDashboard() {
   return (
@@ -62,7 +62,7 @@ export default function HireFlowDashboard() {
             <DashboardLayout />
           </ProtectedRoute>
         }>
-          <Route index element={<OverviewView dashboardStats={DASHBOARD_STATS} analyticsData={ANALYTICS_DATA} recentCandidates={RECENT_CANDIDATES} />} />
+          <Route index element={<OverviewView />} />
           <Route path="jobs" element={<JobsView />} />
           <Route path="jobs/create" element={<CreateJob />} />
           <Route path="jobs/:id" element={<JobDetail />} />

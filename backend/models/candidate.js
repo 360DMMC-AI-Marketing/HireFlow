@@ -1,10 +1,27 @@
 // Candidate model
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const candidateSchema = new mongoose.Schema({
-  // Add candidate schema fields here
+  name: { 
+    type:String,
+    required: true
+  },
+  email: {
+    type: String,
+    required: true, 
+    match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, "Please provide a valid email"]
+  },
+  resume_data: {
+    type: String,
+    required: true
+  },
+  scores: {
+    type: Map,
+    of: Number
+  },
+  
 }, {
   timestamps: true
 });
 
-module.exports = mongoose.model('Candidate', candidateSchema);
+export default mongoose.model('Candidate', candidateSchema);

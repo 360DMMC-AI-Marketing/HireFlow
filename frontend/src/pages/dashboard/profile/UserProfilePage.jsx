@@ -268,10 +268,22 @@ const UserProfilePage = () => {
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setUser(prev => ({
-          ...prev,
-          avatar: reader.result
-        }));
+        const newAvatar = reader.result;
+        setUser(prev => {
+          const updated = {
+            ...prev,
+            avatar: newAvatar
+          };
+          // Immediately save to localStorage and dispatch event
+          localStorage.setItem('user', JSON.stringify(updated));
+          try {
+            window.dispatchEvent(new CustomEvent('userUpdated', { detail: updated }));
+          } catch (e) {
+            console.error('Error dispatching userUpdated event:', e);
+          }
+          return updated;
+        });
+        toast.success('Profile picture updated! Remember to save your profile.');
       };
       reader.readAsDataURL(file);
     }

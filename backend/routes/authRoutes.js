@@ -3,7 +3,8 @@ import {
     signup, 
     verifyEmail, 
     login, 
-    forgotPassword, 
+    forgotPassword,
+    verifyResetCode,
     resetPassword, 
     getMe, 
     logout 
@@ -17,6 +18,7 @@ router.post("/signup", signup);
 router.post("/verify-email", verifyEmail);
 router.post("/login", login);
 router.post("/forgot-password", forgotPassword);
+router.post("/verify-reset-code", verifyResetCode);
 router.post("/reset-password/:token", resetPassword);
 
 // Protected routes

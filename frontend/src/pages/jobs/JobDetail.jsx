@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '@/utils/axios';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -51,7 +51,7 @@ const JobDetailPage = () => {
 
   const fetchJobDetails = async () => {
     try {
-      const response = await axios.get(`http://localhost:5000/api/jobs/${id}`);
+      const response = await api.get(`/jobs/${id}`);
       setJob(response.data);
     } catch (error) {
       console.error('Error fetching job:', error);
@@ -62,7 +62,7 @@ const JobDetailPage = () => {
 
   const handleStatusChange = async (newStatus) => {
     try {
-      await axios.patch(`http://localhost:5000/api/jobs/${id}/status`, { status: newStatus });
+      await api.patch(`/jobs/${id}/status`, { status: newStatus });
       setJob(prev => ({ ...prev, status: newStatus }));
       setShowStatusDialog(false);
     } catch (error) {
@@ -73,7 +73,7 @@ const JobDetailPage = () => {
 
   const handleDuplicate = async () => {
     try {
-      const response = await axios.post(`http://localhost:5000/api/jobs/${id}/duplicate`);
+      const response = await api.post(`/jobs/${id}/duplicate`);
       navigate(`/dashboard/jobs/${response.data._id}`);
     } catch (error) {
       console.error('Error duplicating job:', error);
@@ -83,7 +83,7 @@ const JobDetailPage = () => {
 
   const handleDelete = async () => {
     try {
-      await axios.delete(`http://localhost:5000/api/jobs/${id}`);
+      await api.delete(`/jobs/${id}`);
       navigate('/dashboard/jobs');
     } catch (error) {
       console.error('Error deleting job:', error);

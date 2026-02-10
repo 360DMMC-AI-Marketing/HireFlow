@@ -4,6 +4,12 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 
 const UserSchema = new mongoose.Schema({
+    role: {
+        type: String,
+        enum: ['admin', 'recruiter', 'hiring_manager'],
+        default: 'recruiter'
+    },
+    
     email: {
         type: String,
         required: [true, "Please provide an email"],

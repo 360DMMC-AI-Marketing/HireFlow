@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '@/utils/axios';
 import { Button } from '@/components/ui/button';
 import { Plus, Filter } from 'lucide-react';
 import JobCard from '@/components/jobs/JobCard';
@@ -17,7 +17,7 @@ const JobsList = () => {
 
   const fetchJobs = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/jobs');
+      const response = await api.get('/jobs');
       setJobs(response.data);
     } catch (err) {
       setError(err.message);

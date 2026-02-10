@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '@/utils/axios';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, ArrowRight, CheckCircle } from 'lucide-react';
@@ -85,7 +85,7 @@ const CreateJobWizard = () => {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      const response = await axios.post('http://localhost:5000/api/jobs', formData);
+      const response = await api.post('/jobs', formData);
       alert('Job Created Successfully!');
       navigate(`/dashboard/jobs/${response.data._id}`);
     } catch (error) {

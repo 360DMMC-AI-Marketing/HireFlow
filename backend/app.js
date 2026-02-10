@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import bodyParser from 'body-parser';
+// import bodyParser from 'body-parser'; // ❌ Removed: You don't need this anymore
 import authRoutes from './routes/authRoutes.js';
 import jobsRouter from './routes/jobs.js';
 import integrationsRouter from './routes/integrations.js';
@@ -41,8 +41,10 @@ const corsOptions = {
 
 // Middleware
 app.use(cors(corsOptions));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+// ✅ FIX: Increased limit to 10mb so your avatar/resume uploads don't crash
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Routes
 app.use('/api/auth', authRoutes);

@@ -21,6 +21,10 @@ const UserSchema = new mongoose.Schema({
         type: String,
         required: [true, "Please provide a company name"]
     },
+    companyWebsite: {
+        type: String,
+        default: ''
+    },
     industry: {
         type: String,
         enum: ['Technology', 'Healthcare', 'Finance', 'Retail', 'Manufacturing', 'Education', 'Real Estate', 'Consulting', 'Other'],
@@ -30,6 +34,34 @@ const UserSchema = new mongoose.Schema({
         type: String,
         enum: ['1-10', '11-50', '51-200', '201-500', '500+'],
         required: [true, "Please provide company size"]
+    },
+    firstName: {
+        type: String,
+        default: ''
+    },
+    lastName: {
+        type: String,
+        default: ''
+    },
+    phone: {
+        type: String,
+        default: ''
+    },
+    jobTitle: {
+        type: String,
+        default: ''
+    },
+    department: {
+        type: String,
+        default: ''
+    },
+    bio: {
+        type: String,
+        default: ''
+    },
+    avatar: {
+        type: String,
+        default: ''
     },
     isEmailVerified: {
         type: Boolean,

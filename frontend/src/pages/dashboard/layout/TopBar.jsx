@@ -6,15 +6,37 @@ import { ImageWithFallback } from "@/components/figma/ImageWithFallback";
 export const TopBar = ({ onMenuClick }) => {
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = React.useState(false);
-  
-  // Get user from localStorage
-  const user = React.useMemo(() => {
+
+  // Keep a local user state so TopBar can update reactively when profile changes
+  const [user, setUser] = React.useState(() => {
     try {
       const userData = localStorage.getItem('user');
       return userData ? JSON.parse(userData) : null;
     } catch (error) {
       return null;
     }
+  });
+
+  // Listen for user updates dispatched by profile page, and storage events
+  React.useEffect(() => {
+    const onUserUpdated = (e) => {
+      if (e?.detail) setUser(e.detail);
+    };
+
+    const onStorage = (ev) => {
+      if (ev.key === 'user') {
+        try {
+          setUser(ev.newValue ? JSON.parse(ev.newValue) : null);
+        } catch (err) {}
+      }
+    };
+
+    window.addEventListener('userUpdated', onUserUpdated);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('userUpdated', onUserUpdated);
+      window.removeEventListener('storage', onStorage);
+    };
   }, []);
 
   const handleLogout = () => {
@@ -62,15 +84,15 @@ export const TopBar = ({ onMenuClick }) => {
             onClick={() => setShowUserMenu(!showUserMenu)}
           >
             <ImageWithFallback 
-              src={user?.profilePicture || "https://images.unsplash.com/photo-1769636929261-e913ed023c83?q=80&w=100"} 
+              src={user?.avatar || user?.profilePicture || "https://images.unsplash.com/photo-1769636929261-e913ed023c83?q=80&w=100"} 
               alt="Profile" 
               className="w-10 h-10 rounded-xl object-cover ring-2 ring-white shadow-md shadow-slate-200"
             />
             <div className="text-left hidden sm:block">
               <p className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                {user?.companyName || user?.email?.split('@')[0] || 'User'}
+                {user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.companyName || user?.email?.split('@')[0] || 'User'}
               </p>
-              <p className="text-xs text-slate-500">{user?.role || 'Admin'}</p>
+              <p className="text-xs text-slate-500">{user?.jobTitle || user?.role || 'Admin'}</p>
             </div>
             <ChevronDown className={`w-4 h-4 text-slate-400 hidden sm:block transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
           </div>

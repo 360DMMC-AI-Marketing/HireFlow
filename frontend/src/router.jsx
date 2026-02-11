@@ -11,7 +11,25 @@ import { InterviewsView } from "@/app/components/dashboard/views/InterviewsView"
 import { AIVideoView } from "@/app/components/dashboard/views/AIVideoView";
 import { AnalyticsView } from "@/app/components/dashboard/views/AnalyticsView"; 
 import { SettingsView } from "@/app/components/dashboard/views/SettingsView";
+import CandidateDetailPage from "@/pages/candidates/CandidateDetailPage";
+import AddCandidatePage from "@/pages/candidates/AddCandidatePage";
+import JobApplicationPage from "@/pages/jobs/JobApplicationPage";
+
 const router = createBrowserRouter([
+    // Public routes (no auth required)
+    {
+        path: "/apply/:jobId",
+        element: <JobApplicationPage />,
+    },
+    {
+        path: "/login",
+        element: <LoginPage />,
+    },
+    {
+        path: "/signup",
+        element: <SignupPage />,
+    },
+    // Protected routes (require auth)
     {
         element: <MainLayout />,
         children: [
@@ -23,6 +41,14 @@ const router = createBrowserRouter([
             {
                 path: "/candidates",
                 element: <CandidatesView />,
+            },
+            {
+                path: "/dashboard/candidates/add",
+                element: <AddCandidatePage />,
+            },
+            {
+                path: "/dashboard/candidates/:id",
+                element: <CandidateDetailPage />,
             },
             {   
                 path:"/interviews",
@@ -39,15 +65,9 @@ const router = createBrowserRouter([
             {
                 path:"/settings",
                 element:<SettingsView/>,        
-
-            },
-            {
-                path: "/login",
-                element: <LoginPage />,
             },
         ],
     },
-    {       
-            }
-
 ]);
+
+export default router;

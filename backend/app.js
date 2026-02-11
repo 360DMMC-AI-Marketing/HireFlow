@@ -23,31 +23,10 @@ import errorHandler from './middleware/errorHandler.js';
 const app = express();
 
 // ============================================================
-// 🔒 SECURITY MIDDLEWARE
+// 🌐 CORS CONFIGURATION (Must be first!)
 // ============================================================
 
-// 1. Helmet: Set security HTTP headers (hides "Express" info, blocks malicious scripts)
-app.use(helmet());
-
-// 2. Rate Limiting: Limit requests from the same IP
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
-    message: { error: 'Too many requests, please try again after 15 minutes' },
-    standardHeaders: 'draft-7', // Updated for Express 5 compatibility
-    legacyHeaders: false,
-    // Skip successful requests to reduce load
-    skipSuccessfulRequests: false,
-    // Validate that the library can read client IP
-    validate: { xForwardedForHeader: false }
-});
-app.use(limiter);
-
-// ============================================================
-// 🌐 CONFIGURATION
-// ============================================================
-
-// CORS configuration
+// CORS configuration - Applied BEFORE security middleware to handle preflight requests
 const allowedOrigins = [
     'http://localhost:5173',
     'http://localhost:5174',
@@ -58,16 +37,41 @@ const allowedOrigins = [
 
 const corsOptions = {
     origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps, curl, postman)
         if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
             callback(new Error('Not allowed by CORS'));
         }
     },
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
+    maxAge: 600 // Cache preflight requests for 10 minutes
 };
 
 app.use(cors(corsOptions));
+
+// ============================================================
+// 🔒 SECURITY MIDDLEWARE
+// ============================================================
+
+// 1. Helmet: Set security HTTP headers (hides "Express" info, blocks malicious scripts)
+app.use(helmet());
+
+// 2. Rate Limiting: Limit requests from the same IP
+// More lenient in development, stricter in production
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: process.env.NODE_ENV === 'production' ? 200 : 10000, // 10000 for dev, 200 for production
+    message: { error: 'Too many requests, please try again after 15 minutes' },
+    standardHeaders: 'draft-7', // Updated for Express 5 compatibility
+    legacyHeaders: false,
+    skipSuccessfulRequests: false,
+    validate: { xForwardedForHeader: false }
+});
+app.use(limiter);
 
 // Body Parser Middleware (High limit for image uploads)
 app.use(express.json({ limit: '10mb' }));

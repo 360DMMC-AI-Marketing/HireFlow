@@ -1,8 +1,21 @@
-import { Outlet, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 
 function MainLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    // Check if user is authenticated
+    const token = localStorage.getItem('token');
+    const user = localStorage.getItem('user');
+    
+    // If not authenticated and trying to access protected routes, redirect to login
+    if (!token && !user && location.pathname !== '/login' && location.pathname !== '/signup') {
+      navigate("/login", { replace: true });
+    }
+  }, [location, navigate]);
 
   const logout = () => {
     localStorage.clear();

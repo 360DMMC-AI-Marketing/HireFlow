@@ -397,49 +397,79 @@ const JobDetailPage = () => {
               </Card>
             )}
 
-            {/* Distribution */}
+            {/* Distribution & Application Link */}
             <Card>
               <CardHeader>
-                <CardTitle>Distribution</CardTitle>
+                <CardTitle>Application Link</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                {job.distribution?.linkedin?.enabled && (
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-700">LinkedIn</span>
-                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
-                      Active
-                    </Badge>
+              <CardContent className="space-y-4">
+                {/* Public Application URL */}
+                <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+                  <div className="text-sm font-semibold text-indigo-900 mb-2">
+                    📋 Public Application URL
                   </div>
-                )}
-                {job.distribution?.indeed?.enabled && (
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-700">Indeed</span>
-                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
-                      Active
-                    </Badge>
-                  </div>
-                )}
-                {job.distribution?.hireflowPortal?.enabled && (
-                  <div className="text-sm">
-                    <div className="text-slate-700 mb-1">HireFlow Portal</div>
-                    <a
-                      href={`https://hireflow.com/apply/${job.distribution.hireflowPortal.slug}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-indigo-600 hover:underline text-xs break-all"
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-xs text-indigo-700 bg-white px-3 py-2 rounded border border-indigo-200 break-all">
+                      {window.location.origin}/apply/{job._id}
+                    </code>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/apply/${job._id}`);
+                        alert('Application link copied to clipboard!');
+                      }}
+                      className="shrink-0"
                     >
-                      {`hireflow.com/apply/${job.distribution.hireflowPortal.slug}`}
-                    </a>
+                      <Copy className="w-4 h-4" />
+                    </Button>
                   </div>
-                )}
-                {job.distribution?.emailApplications?.enabled && (
-                  <div className="text-sm">
-                    <div className="text-slate-700 mb-1">Email Applications</div>
-                    <div className="text-xs text-slate-600 break-all">
-                      {job.distribution.emailApplications.email}
+                  <p className="text-xs text-indigo-600 mt-2">
+                    Share this link to receive applications directly
+                  </p>
+                </div>
+
+                {/* Distribution Channels */}
+                <div className="space-y-3 pt-3 border-t">
+                  <div className="text-sm font-semibold text-slate-700 mb-2">Distribution Channels</div>
+                  {job.distribution?.linkedin?.enabled && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-700">LinkedIn</span>
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
+                        Active
+                      </Badge>
                     </div>
-                  </div>
-                )}
+                  )}
+                  {job.distribution?.indeed?.enabled && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-700">Indeed</span>
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
+                        Active
+                      </Badge>
+                    </div>
+                  )}
+                  {job.distribution?.hireflowPortal?.enabled && (
+                    <div className="text-sm">
+                      <div className="text-slate-700 mb-1">HireFlow Portal</div>
+                      <a
+                        href={`https://hireflow.com/apply/${job.distribution.hireflowPortal.slug}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-600 hover:underline text-xs break-all"
+                      >
+                        {`hireflow.com/apply/${job.distribution.hireflowPortal.slug}`}
+                      </a>
+                    </div>
+                  )}
+                  {job.distribution?.emailApplications?.enabled && (
+                    <div className="text-sm">
+                      <div className="text-slate-700 mb-1">Email Applications</div>
+                      <div className="text-xs text-slate-600 break-all">
+                        {job.distribution.emailApplications.email}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
 

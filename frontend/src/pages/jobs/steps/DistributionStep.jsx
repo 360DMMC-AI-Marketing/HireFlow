@@ -1,17 +1,37 @@
+import React, { useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ExternalLink, Lock, Copy, CheckCircle } from 'lucide-react';
-import { useState } from 'react';
+import { 
+  ExternalLink, 
+  Lock, 
+  Copy, 
+  CheckCircle, 
+  Linkedin, 
+  Loader2, 
+  X,
+  Check 
+} from 'lucide-react';
 
 const DistributionStep = ({ formData, setFormData }) => {
+  // --- STATE ---
   const [slugCopied, setSlugCopied] = useState(false);
   const [emailCopied, setEmailCopied] = useState(false);
-  const userTier = 'Pro'; // This would come from user context
-  const integrations = { linkedin: true, indeed: false }; // Would come from API
+  const [showPreview, setShowPreview] = useState(false); // For Modal
+  
+  // Simulation States (To make the "Connect" buttons work)
+  const [isConnectingIndeed, setIsConnectingIndeed] = useState(false);
+  const [indeedConnected, setIndeedConnected] = useState(false);
+  
+  const [isConnectingLinkedin, setIsConnectingLinkedin] = useState(false);
+  const [linkedinConnected, setLinkedinConnected] = useState(false); // Defaulting to false to show the connect flow
+
+  const userTier = 'Pro'; // Example context
+
+  // --- HANDLERS ---
 
   const handleDistributionChange = (platform, field, value) => {
     setFormData(prev => ({
@@ -40,6 +60,26 @@ const DistributionStep = ({ formData, setFormData }) => {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Simulate Connecting to Indeed
+  const handleIndeedConnect = () => {
+    setIsConnectingIndeed(true);
+    setTimeout(() => {
+      setIndeedConnected(true);
+      setIsConnectingIndeed(false);
+      handleDistributionChange('indeed', 'enabled', true); // Auto-enable switch
+    }, 1500);
+  };
+
+  // Simulate Connecting to LinkedIn
+  const handleLinkedinConnect = () => {
+    setIsConnectingLinkedin(true);
+    setTimeout(() => {
+      setLinkedinConnected(true);
+      setIsConnectingLinkedin(false);
+      handleDistributionChange('linkedin', 'enabled', true); // Auto-enable switch
+    }, 1500);
+  };
+
   return (
     <div className="space-y-8">
       <div>
@@ -47,32 +87,41 @@ const DistributionStep = ({ formData, setFormData }) => {
         <p className="text-sm text-slate-600">Select where you want to publish this job</p>
       </div>
 
-      {/* LinkedIn */}
+      {/* ================= LINKEDIN ================= */}
       <div className="border rounded-lg p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">
-              in
+            <div className="w-12 h-12 bg-[#0077b5] rounded-lg flex items-center justify-center text-white">
+              <Linkedin className="w-6 h-6" />
             </div>
             <div>
               <div className="font-semibold text-slate-900">LinkedIn Jobs</div>
               <div className="text-sm text-slate-600">Post to LinkedIn's job board</div>
             </div>
           </div>
-          {integrations.linkedin ? (
+          
+          {/* Connect Logic */}
+          {linkedinConnected ? (
             <Checkbox
               checked={formData.distribution.linkedin.enabled}
               onCheckedChange={(checked) => handleDistributionChange('linkedin', 'enabled', checked)}
             />
           ) : (
-            <Button variant="outline" size="sm">
-              Connect LinkedIn
+            <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleLinkedinConnect} 
+                disabled={isConnectingLinkedin}
+            >
+              {isConnectingLinkedin ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : null}
+              {isConnectingLinkedin ? 'Connecting...' : 'Connect LinkedIn'}
             </Button>
           )}
         </div>
 
-        {formData.distribution.linkedin.enabled && integrations.linkedin && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+        {/* LinkedIn Details (Only show if enabled) */}
+        {formData.distribution.linkedin.enabled && linkedinConnected && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t animate-in fade-in slide-in-from-top-2">
             <div>
               <Label>Seniority Level</Label>
               <Select
@@ -125,7 +174,13 @@ const DistributionStep = ({ formData, setFormData }) => {
               </div>
             )}
 
-            <Button variant="outline" className="flex items-center gap-2">
+            {/* PREVIEW BUTTON (Restored Functionality) */}
+            <Button 
+                type="button"
+                variant="outline" 
+                className="flex items-center gap-2"
+                onClick={() => setShowPreview(true)}
+            >
               <ExternalLink className="w-4 h-4" />
               Preview on LinkedIn
             </Button>
@@ -133,7 +188,7 @@ const DistributionStep = ({ formData, setFormData }) => {
         )}
       </div>
 
-      {/* Indeed */}
+      {/* ================= INDEED ================= */}
       <div className="border rounded-lg p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -145,20 +200,28 @@ const DistributionStep = ({ formData, setFormData }) => {
               <div className="text-sm text-slate-600">Reach millions of job seekers</div>
             </div>
           </div>
-          {integrations.indeed ? (
+
+          {/* Connect Logic */}
+          {indeedConnected ? (
             <Checkbox
               checked={formData.distribution.indeed.enabled}
               onCheckedChange={(checked) => handleDistributionChange('indeed', 'enabled', checked)}
             />
           ) : (
-            <Button variant="outline" size="sm">
-              Connect Indeed
+            <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleIndeedConnect}
+                disabled={isConnectingIndeed}
+            >
+               {isConnectingIndeed ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : null}
+               {isConnectingIndeed ? 'Connecting...' : 'Connect Indeed'}
             </Button>
           )}
         </div>
 
-        {formData.distribution.indeed.enabled && integrations.indeed && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+        {formData.distribution.indeed.enabled && indeedConnected && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t animate-in fade-in slide-in-from-top-2">
             <div>
               <Label>Salary Display</Label>
               <Select
@@ -183,7 +246,7 @@ const DistributionStep = ({ formData, setFormData }) => {
           </div>
         )}
 
-        {!integrations.indeed && (
+        {!indeedConnected && (
           <Alert>
             <AlertDescription>
               Connect your Indeed account to post jobs directly from HireFlow.
@@ -192,7 +255,7 @@ const DistributionStep = ({ formData, setFormData }) => {
         )}
       </div>
 
-      {/* HireFlow Portal */}
+      {/* ================= HIREFLOW PORTAL ================= */}
       <div className="border rounded-lg p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -261,24 +324,11 @@ const DistributionStep = ({ formData, setFormData }) => {
                 />
               </div>
             )}
-
-            {userTier === 'Enterprise' && (
-              <Button variant="outline">Customize Branding</Button>
-            )}
           </div>
-        )}
-
-        {userTier === 'Free' && (
-          <Alert>
-            <AlertDescription className="flex items-center justify-between">
-              <span>Upgrade to Pro to enable HireFlow Application Portal</span>
-              <Button size="sm">Upgrade</Button>
-            </AlertDescription>
-          </Alert>
         )}
       </div>
 
-      {/* Email Applications */}
+      {/* ================= EMAIL APPLICATIONS ================= */}
       <div className="border rounded-lg p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -330,6 +380,75 @@ const DistributionStep = ({ formData, setFormData }) => {
           </div>
         )}
       </div>
+
+      {/* ================= LINKEDIN PREVIEW MODAL (Restored) ================= */}
+      {showPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="px-4 py-3 border-b flex items-center justify-between bg-slate-50">
+              <h4 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
+                <Linkedin className="w-4 h-4 text-[#0077b5]" />
+                Post Preview
+              </h4>
+              <button 
+                onClick={() => setShowPreview(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* LinkedIn Post Mockup */}
+            <div className="p-6 bg-[#f3f2ef]">
+              <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+                <div className="flex gap-3 mb-3">
+                  <div className="w-12 h-12 bg-slate-200 rounded-full flex-shrink-0" />
+                  <div>
+                    <div className="font-bold text-slate-900 text-sm">Your Company Name</div>
+                    <div className="text-xs text-slate-500">Just now • 🌐</div>
+                  </div>
+                </div>
+                
+                <div className="text-sm text-slate-800 mb-4 space-y-2">
+                  <p>We are hiring! 🚀</p>
+                  <p>
+                    We are looking for a <span className="font-semibold">{formData.title || 'Job Title'}</span> to 
+                    join our {formData.department} team.
+                  </p>
+                  <p className="text-blue-600 font-medium cursor-pointer">#hiring #careers #{formData.department?.toLowerCase()}</p>
+                </div>
+
+                {/* Link Preview Card */}
+                <div className="border border-slate-300 rounded bg-slate-50 overflow-hidden cursor-pointer">
+                  <div className="h-32 bg-slate-200 w-full flex items-center justify-center text-slate-400">
+                    Job Cover Image
+                  </div>
+                  <div className="p-3 bg-white border-t border-slate-200">
+                    <div className="font-semibold text-slate-900 text-sm truncate">
+                      {formData.title || 'Job Title'}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
+                      <span>{formData.location || 'Remote'}</span>
+                      <span>•</span>
+                      <span>{formData.employmentType}</span>
+                    </div>
+                    <div className="mt-3">
+                        <span className="text-xs border border-blue-600 text-blue-600 px-3 py-1 rounded-full font-semibold">
+                            Apply Now
+                        </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t bg-slate-50 flex justify-end">
+              <Button onClick={() => setShowPreview(false)}>Close Preview</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

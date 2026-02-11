@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '@/utils/axios';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, ArrowRight, CheckCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle, Save } from 'lucide-react'; // Added 'Save' icon
 import JobDetailsStep from './steps/JobDetailsStep';
 import DistributionStep from './steps/DistributionStep';
 import ReviewStep from './steps/ReviewStep';
@@ -19,7 +19,7 @@ const CreateJobWizard = () => {
     location: '',
     employmentType: 'Full-Time',
     experienceLevel: 'Mid-Level',
-    status: 'Draft',
+    status: 'Draft', // Default is Draft
     description: '',
     responsibilities: '',
     qualifications: '',
@@ -68,7 +68,7 @@ const CreateJobWizard = () => {
     { title: 'Job Details', component: JobDetailsStep },
     { title: 'Distribution', component: DistributionStep },
     { title: 'Review', component: ReviewStep }
-];
+  ];
 
   const handleNext = () => {
     if (currentStep < steps.length - 1) {
@@ -82,11 +82,19 @@ const CreateJobWizard = () => {
     }
   };
 
-  const handleSubmit = async () => {
+  // ✅ UPDATED: Function now accepts the specific status (Draft or Active)
+  const handleSubmit = async (finalStatus) => {
     setIsSubmitting(true);
     try {
-      const response = await api.post('/jobs', formData);
-      alert('Job Created Successfully!');
+      // We create a specific payload overriding the status with which button was clicked
+      const payload = { ...formData, status: finalStatus };
+      
+      const response = await api.post('/jobs', payload);
+      
+      // Different alert message based on action
+      const message = finalStatus === 'Active' ? 'Job Published Successfully!' : 'Job Saved as Draft!';
+      alert(message);
+      
       navigate(`/dashboard/jobs/${response.data._id}`);
     } catch (error) {
       console.error('Error creating job:', error);
@@ -178,14 +186,27 @@ const CreateJobWizard = () => {
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
           ) : (
-            <Button
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              {isSubmitting ? 'Creating...' : 'Create Job'}
-              <CheckCircle className="w-4 h-4 ml-2" />
-            </Button>
+            // ✅ UPDATED: Split into two buttons for the final step
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => handleSubmit('Draft')}
+                disabled={isSubmitting}
+                className="border-slate-300 hover:bg-slate-100"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                Save as Draft
+              </Button>
+
+              <Button
+                onClick={() => handleSubmit('Active')}
+                disabled={isSubmitting}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {isSubmitting ? 'Publishing...' : 'Publish Job'}
+                <CheckCircle className="w-4 h-4 ml-2" />
+              </Button>
+            </div>
           )}
         </div>
       </div>

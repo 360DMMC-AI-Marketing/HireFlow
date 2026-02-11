@@ -1,31 +1,233 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { useNavigate } from 'react-router-dom';
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import api from '@/utils/axios';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   Plus, Brain, FileText, Video, LayoutGrid, List, 
-  MoreHorizontal, Calendar, Mail, Phone 
+  MoreHorizontal, Calendar, Mail, Phone, Search, X,
+  Download, Trash2, Tag, Users, Eye, ThumbsUp, ThumbsDown, Star
 } from "lucide-react";
-import { Card } from "../shared/Card"; // Assuming you have this
+import { Card } from "../shared/Card";
 import { ImageWithFallback } from "@/components/figma/ImageWithFallback";
 import { PIPELINE_STAGES } from "@/utils/data/dashboardData";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator
+} from "@/components/ui/dropdown-menu";
 
 function cn(...inputs) {
   return twMerge(clsx(inputs));
 }
 
 export const CandidatesView = () => {
-  // ✅ State to toggle between 'pipeline' (Board) and 'list' (Table)
-  const [viewMode, setViewMode] = useState('pipeline');
+  const navigate = useNavigate();
+  const [viewMode, setViewMode] = useState('list');
+  
+  // API State
+  const [candidates, setCandidates] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // ✅ Helper to flatten data for the Table View
-  // We take the nested structure and turn it into a flat array of candidates
-  const allCandidates = PIPELINE_STAGES.flatMap(stage => 
+  // --- FILTER STATE ---
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('date');
+  const [sortOrder, setSortOrder] = useState('desc');
+
+  // --- BULK ACTIONS STATE ---
+  const [selectedCandidates, setSelectedCandidates] = useState([]);
+  const [showBulkActions, setShowBulkActions] = useState(false);
+
+  useEffect(() => {
+    fetchCandidates();
+  }, []);
+
+  useEffect(() => {
+    setShowBulkActions(selectedCandidates.length > 0);
+  }, [selectedCandidates]);
+
+  const fetchCandidates = async () => {
+    try {
+      const response = await api.get('/candidates');
+      setCandidates(response.data);
+    } catch (err) {
+      console.error('Error fetching candidates:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- FILTERING & SORTING LOGIC ---
+  const filteredAndSortedCandidates = useMemo(() => {
+    let filtered = candidates.filter(candidate => {
+      const searchLower = searchQuery.toLowerCase();
+      const matchesSearch = 
+        candidate.name?.toLowerCase().includes(searchLower) || 
+        candidate.email?.toLowerCase().includes(searchLower);
+
+      const matchesStatus = statusFilter === 'all' || candidate.status === statusFilter;
+      const matchesSource = sourceFilter === 'all' || candidate.source === sourceFilter;
+
+      return matchesSearch && matchesStatus && matchesSource;
+    });
+
+    filtered.sort((a, b) => {
+      let compareValue = 0;
+      
+      if (sortBy === 'score') {
+        compareValue = (b.matchScore || 0) - (a.matchScore || 0);
+      } else if (sortBy === 'name') {
+        compareValue = (a.name || '').localeCompare(b.name || '');
+      } else {
+        const dateA = new Date(a.appliedDate || a.createdAt);
+        const dateB = new Date(b.appliedDate || b.createdAt);
+        compareValue = dateB - dateA;
+      }
+
+      return sortOrder === 'asc' ? -compareValue : compareValue;
+    });
+
+    return filtered;
+  }, [candidates, searchQuery, statusFilter, sourceFilter, sortBy, sortOrder]);
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('all');
+    setSourceFilter('all');
+    setSortBy('date');
+    setSortOrder('desc');
+  };
+
+  // --- BULK ACTIONS ---
+  const toggleSelectAll = () => {
+    if (selectedCandidates.length === filteredAndSortedCandidates.length) {
+      setSelectedCandidates([]);
+    } else {
+      setSelectedCandidates(filteredAndSortedCandidates.map(c => c._id));
+    }
+  };
+
+  const toggleSelectCandidate = (candidateId) => {
+    setSelectedCandidates(prev => 
+      prev.includes(candidateId)
+        ? prev.filter(id => id !== candidateId)
+        : [...prev, candidateId]
+    );
+  };
+
+  const handleBulkAction = async (action) => {
+    try {
+      switch(action) {
+        case 'email':
+          alert(`Emailing ${selectedCandidates.length} candidates...`);
+          break;
+        case 'export':
+          alert(`Exporting ${selectedCandidates.length} candidates...`);
+          break;
+        case 'tag':
+          alert(`Tagging ${selectedCandidates.length} candidates...`);
+          break;
+        case 'delete':
+          if (confirm(`Delete ${selectedCandidates.length} candidates?`)) {
+            await api.delete('/candidates/bulk', { data: { ids: selectedCandidates } });
+            fetchCandidates();
+            setSelectedCandidates([]);
+          }
+          break;
+      }
+    } catch (error) {
+      console.error('Bulk action error:', error);
+      alert('Error performing bulk action');
+    }
+  };
+
+  // Status & Source Badge Functions
+  const getStatusBadge = (status) => {
+    const variants = {
+      New: 'bg-blue-100 text-blue-800 border-blue-300',
+      Screening: 'bg-purple-100 text-purple-800 border-purple-300',
+      Interview: 'bg-amber-100 text-amber-800 border-amber-300',
+      Offer: 'bg-green-100 text-green-800 border-green-300',
+      Hired: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+      Rejected: 'bg-red-100 text-red-800 border-red-300',
+      Applied: 'bg-blue-100 text-blue-800 border-blue-300'
+    };
+    return variants[status] || variants.New;
+  };
+
+  const getSourceBadge = (source) => {
+    const variants = {
+      'LinkedIn': { bg: 'bg-[#0077b5]/10', text: 'text-[#0077b5]', border: 'border-[#0077b5]/30', icon: '💼' },
+      'Indeed': { bg: 'bg-blue-900/10', text: 'text-blue-900', border: 'border-blue-900/30', icon: '🔍' },
+      'Email': { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-300', icon: '📧' },
+      'HireFlow Direct': { bg: 'bg-indigo-100', text: 'text-indigo-700', border: 'border-indigo-300', icon: '🎯' }
+    };
+    return variants[source] || variants['Email'];
+  };
+
+  const getScoreBadge = (score) => {
+    if (score >= 80) return 'bg-green-600 text-white';
+    if (score >= 60) return 'bg-amber-500 text-white';
+    if (score >= 40) return 'bg-orange-500 text-white';
+    return 'bg-red-500 text-white';
+  };
+
+  const formatDate = (date) => {
+    return new Date(date).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const isAllSelected = selectedCandidates.length === filteredAndSortedCandidates.length && filteredAndSortedCandidates.length > 0;
+
+  // Use fallback data if API returns empty
+  const allCandidates = candidates.length > 0 ? candidates : PIPELINE_STAGES.flatMap(stage => 
     stage.candidates.map(candidate => ({
-      ...candidate,
-      stageName: stage.name,
-      stageId: stage.id
+      _id: candidate.id,
+      name: candidate.name,
+      email: candidate.email || 'No email',
+      role: candidate.role,
+      status: stage.name,
+      matchScore: candidate.score,
+      source: 'HireFlow Direct',
+      avatar: candidate.avatar,
+      appliedDate: new Date(),
+      createdAt: new Date(),
+      positionApplied: candidate.role,
+      stageId: stage.id,
+      stageName: stage.name
     }))
   );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-4 text-slate-600">Loading candidates...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 p-6">
@@ -35,37 +237,190 @@ export const CandidatesView = () => {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Talent Pipeline</h1>
           <p className="text-slate-500 text-sm font-medium mt-1">
-            {viewMode === 'pipeline' ? 'Drag and drop to move candidates' : 'Manage all applicants in a list'}
+            {viewMode === 'pipeline' ? 'Drag and drop to move candidates' : `${allCandidates.length} candidates • ${selectedCandidates.length} selected`}
           </p>
         </div>
         
-        <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
-          <button 
-            onClick={() => setViewMode('list')}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all",
-              viewMode === 'list' 
-                ? "bg-white text-indigo-600 shadow-sm" 
-                : "text-slate-500 hover:text-slate-700"
-            )}
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={() => navigate('/dashboard/candidates/add')}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4"
           >
-            <List className="w-4 h-4" />
-            List View
-          </button>
-          <button 
-            onClick={() => setViewMode('pipeline')}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all",
-              viewMode === 'pipeline' 
-                ? "bg-white text-indigo-600 shadow-sm" 
-                : "text-slate-500 hover:text-slate-700"
-            )}
-          >
-            <LayoutGrid className="w-4 h-4" />
-            Pipeline
-          </button>
+            <Plus className="w-4 h-4" />
+            Add Candidate
+          </Button>
+          
+          <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
+            <button 
+              onClick={() => setViewMode('list')}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all",
+                viewMode === 'list' 
+                  ? "bg-white text-indigo-600 shadow-sm" 
+                  : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              <List className="w-4 h-4" />
+              List View
+            </button>
+            <button 
+              onClick={() => setViewMode('pipeline')}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all",
+                viewMode === 'pipeline' 
+                  ? "bg-white text-indigo-600 shadow-sm" 
+                  : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              <LayoutGrid className="w-4 h-4" />
+              Pipeline
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* --- BULK ACTIONS BAR (Shows when candidates are selected) --- */}
+      {showBulkActions && viewMode === 'list' && (
+        <div className="bg-indigo-50 border-2 border-indigo-200 rounded-xl p-4 flex items-center justify-between animate-in slide-in-from-top-2">
+          <div className="flex items-center gap-3">
+            <Users className="w-5 h-5 text-indigo-600" />
+            <span className="font-semibold text-indigo-900">
+              {selectedCandidates.length} candidate{selectedCandidates.length > 1 ? 's' : ''} selected
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleBulkAction('email')}
+              className="bg-white"
+            >
+              <Mail className="w-4 h-4 mr-2" />
+              Email
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleBulkAction('export')}
+              className="bg-white"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleBulkAction('tag')}
+              className="bg-white"
+            >
+              <Tag className="w-4 h-4 mr-2" />
+              Tag
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleBulkAction('delete')}
+              className="bg-white text-red-600 hover:bg-red-50 border-red-200"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedCandidates([])}
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* --- FILTER BAR (List View Only) --- */}
+      {viewMode === 'list' && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            
+            {/* Search */}
+            <div className="md:col-span-4 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Search by name or email..."
+                className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            {/* Status Dropdown */}
+            <div className="md:col-span-2">
+              <select 
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-600"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="all">All Status</option>
+                <option value="New">New</option>
+                <option value="Screening">Screening</option>
+                <option value="Interview">Interview</option>
+                <option value="Offer">Offer</option>
+                <option value="Hired">Hired</option>
+                <option value="Rejected">Rejected</option>
+                <option value="Applied">Applied</option>
+              </select>
+            </div>
+
+            {/* Source Filter */}
+            <div className="md:col-span-2">
+              <select 
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-600"
+                value={sourceFilter}
+                onChange={(e) => setSourceFilter(e.target.value)}
+              >
+                <option value="all">All Sources</option>
+                <option value="LinkedIn">LinkedIn</option>
+                <option value="Indeed">Indeed</option>
+                <option value="Email">Email</option>
+                <option value="HireFlow Direct">HireFlow Direct</option>
+              </select>
+            </div>
+
+            {/* Sort Dropdown */}
+            <div className="md:col-span-3">
+              <select 
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-600"
+                value={`${sortBy}-${sortOrder}`}
+                onChange={(e) => {
+                  const [newSortBy, newSortOrder] = e.target.value.split('-');
+                  setSortBy(newSortBy);
+                  setSortOrder(newSortOrder);
+                }}
+              >
+                <option value="date-desc">Newest First</option>
+                <option value="date-asc">Oldest First</option>
+                <option value="score-desc">Highest Score</option>
+                <option value="score-asc">Lowest Score</option>
+                <option value="name-asc">Name (A-Z)</option>
+                <option value="name-desc">Name (Z-A)</option>
+              </select>
+            </div>
+
+            {/* Clear Filters */}
+            <div className="md:col-span-1 flex items-center justify-center">
+              {(searchQuery || statusFilter !== 'all' || sourceFilter !== 'all') && (
+                <button 
+                  onClick={clearFilters}
+                  className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+                  title="Clear Filters"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* =========================================================
           MODE 1: PIPELINE VIEW (Your original Kanban Board)
@@ -121,91 +476,164 @@ export const CandidatesView = () => {
       )}
 
       {/* =========================================================
-          MODE 2: LIST VIEW (The New Table)
+          MODE 2: LIST VIEW (Full Featured Table)
          ========================================================= */}
       {viewMode === 'list' && (
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Candidate</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Role</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Stage</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">AI Score</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Applied Date</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {allCandidates.map((candidate) => (
-                  <tr key={candidate.id} className="hover:bg-slate-50/50 transition-colors group">
-                    
-                    {/* Name & Avatar */}
-                    <td className="px-6 py-4">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-slate-50 hover:bg-slate-50">
+                {/* Select All Checkbox */}
+                <TableHead className="w-12">
+                  <Checkbox 
+                    checked={isAllSelected}
+                    onCheckedChange={toggleSelectAll}
+                  />
+                </TableHead>
+                
+                <TableHead className="font-semibold text-slate-700">Candidate Name</TableHead>
+                <TableHead className="font-semibold text-slate-700">Match Score</TableHead>
+                <TableHead className="font-semibold text-slate-700">Status</TableHead>
+                <TableHead className="font-semibold text-slate-700">Source</TableHead>
+                <TableHead className="font-semibold text-slate-700">Position Applied</TableHead>
+                <TableHead className="font-semibold text-slate-700">Applied Date</TableHead>
+                <TableHead className="text-right font-semibold text-slate-700">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredAndSortedCandidates.length > 0 ? (
+                filteredAndSortedCandidates.map((candidate) => (
+                  <TableRow
+                    key={candidate._id}
+                    className="cursor-pointer hover:bg-slate-50"
+                    onClick={() => {
+                      if (candidate._id && candidate._id.toString().length > 5) {
+                        navigate(`/dashboard/candidates/${candidate._id}`);
+                      } else {
+                        alert('Candidate detail page not available for demo data');
+                      }
+                    }}
+                  >
+                    {/* Checkbox */}
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox 
+                        checked={selectedCandidates.includes(candidate._id)}
+                        onCheckedChange={() => toggleSelectCandidate(candidate._id)}
+                      />
+                    </TableCell>
+
+                    {/* Candidate Name & Email */}
+                    <TableCell>
                       <div className="flex items-center gap-3">
-                        <ImageWithFallback src={candidate.avatar} alt={candidate.name} className="w-9 h-9 rounded-full object-cover ring-2 ring-white shadow-sm" />
+                        {candidate.avatar ? (
+                          <ImageWithFallback 
+                            src={candidate.avatar} 
+                            alt={candidate.name} 
+                            className="w-10 h-10 rounded-full object-cover" 
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center font-semibold text-indigo-700">
+                            {candidate.name?.charAt(0).toUpperCase()}
+                          </div>
+                        )}
                         <div>
-                          <p className="text-sm font-bold text-slate-900">{candidate.name}</p>
-                          <p className="text-xs text-slate-500">{candidate.email || 'No email'}</p>
+                          <div className="font-medium text-slate-900">{candidate.name}</div>
+                          <div className="text-sm text-slate-500">{candidate.email}</div>
                         </div>
                       </div>
-                    </td>
+                    </TableCell>
 
-                    {/* Role */}
-                    <td className="px-6 py-4">
-                      <span className="text-sm font-medium text-slate-700">{candidate.role}</span>
-                    </td>
-
-                    {/* Stage Badge */}
-                    <td className="px-6 py-4">
-                      <span className={cn(
-                        "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border",
-                        candidate.stageId === 'hired' ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                        candidate.stageId === 'rejected' ? "bg-red-50 text-red-700 border-red-200" :
-                        "bg-indigo-50 text-indigo-700 border-indigo-200"
-                      )}>
-                        {candidate.stageName}
-                      </span>
-                    </td>
-
-                    {/* AI Score */}
-                    <td className="px-6 py-4">
+                    {/* Match Score */}
+                    <TableCell>
                       <div className="flex items-center gap-2">
-                        <Brain className={cn(
-                          "w-4 h-4",
-                          candidate.score >= 80 ? "text-emerald-500" :
-                          candidate.score >= 50 ? "text-amber-500" : "text-red-500"
-                        )} />
-                        <span className="text-sm font-bold text-slate-700">{candidate.score}%</span>
+                        <div className={`px-3 py-1 rounded-full text-sm font-bold ${getScoreBadge(candidate.matchScore || 0)}`}>
+                          {candidate.matchScore || 0}%
+                        </div>
+                        {candidate.matchScore >= 80 && <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />}
                       </div>
-                    </td>
+                    </TableCell>
 
-                    {/* Date (Dummy Data) */}
-                    <td className="px-6 py-4 text-sm text-slate-500">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                        Oct 24, 2024
-                      </div>
-                    </td>
+                    {/* Status */}
+                    <TableCell>
+                      <Badge className={`${getStatusBadge(candidate.status)} border`}>
+                        {candidate.status}
+                      </Badge>
+                    </TableCell>
 
-                    {/* Actions */}
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Email">
-                          <Mail className="w-4 h-4" />
-                        </button>
-                        <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Profile">
-                          <MoreHorizontal className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
+                    {/* Source */}
+                    <TableCell>
+                      {candidate.source && (
+                        <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${getSourceBadge(candidate.source).bg} ${getSourceBadge(candidate.source).text} ${getSourceBadge(candidate.source).border}`}>
+                          <span>{getSourceBadge(candidate.source).icon}</span>
+                          {candidate.source}
+                        </div>
+                      )}
+                    </TableCell>
 
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    {/* Position Applied */}
+                    <TableCell className="text-slate-600 max-w-xs truncate">
+                      {candidate.positionApplied || candidate.role || 'N/A'}
+                    </TableCell>
+
+                    {/* Applied Date */}
+                    <TableCell className="text-slate-600">
+                      {formatDate(candidate.appliedDate || candidate.createdAt)}
+                    </TableCell>
+
+                    {/* Actions Dropdown */}
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="sm">
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={(e) => {
+                            e.stopPropagation();
+                            if (candidate._id && candidate._id.toString().length > 5) {
+                              navigate(`/dashboard/candidates/${candidate._id}`);
+                            } else {
+                              alert('Candidate detail page not available for demo data');
+                            }
+                          }}>
+                            <Eye className="w-4 h-4 mr-2" />
+                            View Profile
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => {
+                            e.stopPropagation();
+                            window.location.href = `mailto:${candidate.email}`;
+                          }}>
+                            <Mail className="w-4 h-4 mr-2" />
+                            Send Email
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                            <Calendar className="w-4 h-4 mr-2" />
+                            Schedule Interview
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                            <ThumbsUp className="w-4 h-4 mr-2 text-green-600" />
+                            <span className="text-green-600">Move to Next Stage</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                            <ThumbsDown className="w-4 h-4 mr-2 text-red-600" />
+                            <span className="text-red-600">Reject</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={8} className="h-24 text-center text-slate-500">
+                    {allCandidates.length === 0 ? 'No candidates yet. Add one to get started!' : 'No matching candidates found. Try adjusting your filters.'}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
         </div>
       )}
     </div>

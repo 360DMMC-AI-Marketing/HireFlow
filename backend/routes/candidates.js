@@ -41,14 +41,13 @@ router.post('/apply', upload.single('resume'), async (req, res) => {
         const { default: Candidate } = await import('../models/candidate.js');
         
         const candidateData = {
-            name,
-            email,
-            phone,
-            location,
-            linkedIn,
-            summary: coverLetter,
-            positionApplied,
-            jobId,
+            name: name || 'Unknown',
+            email: email || `candidate_${Date.now()}@placeholder.com`, // Generate unique email if not provided
+            phone: phone || '',
+            location: location || '',
+            linkedIn: linkedIn || '',
+            summary: coverLetter || '',
+            positionApplied: positionApplied || 'General Application',
             source: source || 'HireFlow Direct',
             status: 'New',
             matchScore: 0, // Will be calculated by AI later
@@ -56,6 +55,11 @@ router.post('/apply', upload.single('resume'), async (req, res) => {
             resumePath: req.file ? req.file.path : null,
             resumeFileName: req.file ? req.file.originalname : null
         };
+
+        // Only add jobId if it's provided and valid
+        if (jobId && jobId !== 'undefined' && jobId !== 'null') {
+            candidateData.jobId = jobId;
+        }
 
         const candidate = await Candidate.create(candidateData);
         

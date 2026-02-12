@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import api from '@/utils/axios';
@@ -36,6 +36,8 @@ function cn(...inputs) {
 
 export const CandidatesView = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const jobIdFilter = searchParams.get('jobId'); // Get jobId from URL
   const [viewMode, setViewMode] = useState('list');
   
   // API State
@@ -84,8 +86,11 @@ export const CandidatesView = () => {
 
       const matchesStatus = statusFilter === 'all' || candidate.status === statusFilter;
       const matchesSource = sourceFilter === 'all' || candidate.source === sourceFilter;
+      
+      // Filter by jobId if provided in URL
+      const matchesJob = !jobIdFilter || candidate.jobId === jobIdFilter;
 
-      return matchesSearch && matchesStatus && matchesSource;
+      return matchesSearch && matchesStatus && matchesSource && matchesJob;
     });
 
     filtered.sort((a, b) => {
@@ -231,6 +236,27 @@ export const CandidatesView = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 p-6">
+      
+      {/* Job Filter Banner */}
+      {jobIdFilter && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-indigo-600" />
+            <p className="text-sm font-medium text-indigo-900">
+              Showing candidates for a specific job ({filteredAndSortedCandidates.length} found)
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/dashboard/candidates')}
+            className="text-indigo-700 hover:text-indigo-900 hover:bg-indigo-100"
+          >
+            <X className="w-4 h-4 mr-1" />
+            Clear Filter
+          </Button>
+        </div>
+      )}
       
       {/* HEADER & TOGGLE BUTTONS */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">

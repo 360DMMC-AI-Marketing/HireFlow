@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '@/utils/axios';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,8 @@ import { ArrowLeft, Upload, Briefcase, MapPin, DollarSign, CheckCircle } from 'l
 const JobApplicationPage = () => {
   const { jobId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const sourceParam = searchParams.get('source') || 'HireFlow Direct';
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -70,7 +72,7 @@ const JobApplicationPage = () => {
       submitData.append('coverLetter', formData.coverLetter);
       submitData.append('jobId', jobId);
       submitData.append('positionApplied', job.title);
-      submitData.append('source', 'HireFlow Direct');
+      submitData.append('source', sourceParam);
       
       if (formData.resumeFile) {
         submitData.append('resume', formData.resumeFile);

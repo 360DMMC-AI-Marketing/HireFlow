@@ -33,13 +33,19 @@ import {
   Users,
   Calendar,
   CheckCircle,
-  TrendingUp
+  TrendingUp,
+  Mail,
+  Phone,
+  MapPin as MapPinIcon,
+  Star,
+  ExternalLink
 } from 'lucide-react';
 
 const JobDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [job, setJob] = useState(null);
+  const [candidates, setCandidates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showStatusDialog, setShowStatusDialog] = useState(false);
@@ -47,6 +53,7 @@ const JobDetailPage = () => {
 
   useEffect(() => {
     fetchJobDetails();
+    fetchCandidates();
   }, [id]);
 
   const fetchJobDetails = async () => {
@@ -58,6 +65,26 @@ const JobDetailPage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchCandidates = async () => {
+    try {
+      const response = await api.get('/candidates');
+      // Filter candidates for this specific job
+      const jobCandidates = response.data.filter(c => c.jobId === id);
+      setCandidates(jobCandidates);
+    } catch (error) {
+      console.error('Error fetching candidates:', error);
+    }
+  };
+
+  // Calculate analytics from candidates
+  const analytics = {
+    totalApplicants: candidates.length,
+    screenedApplicants: candidates.filter(c => c.status === 'Screening').length,
+    interviewsScheduled: candidates.filter(c => c.status === 'Interview').length,
+    interviewsCompleted: candidates.filter(c => ['Offer', 'Hired'].includes(c.status)).length,
+    topCandidates: candidates.filter(c => c.matchScore >= 80).length
   };
 
   const handleStatusChange = async (newStatus) => {
@@ -221,7 +248,7 @@ const JobDetailPage = () => {
             <CardContent>
               <div className="flex items-center justify-between">
                 <div className="text-3xl font-bold text-slate-900">
-                  {job.analytics?.totalApplicants || 0}
+                  {analytics.totalApplicants}
                 </div>
                 <Users className="w-8 h-8 text-indigo-600" />
               </div>
@@ -235,7 +262,7 @@ const JobDetailPage = () => {
             <CardContent>
               <div className="flex items-center justify-between">
                 <div className="text-3xl font-bold text-slate-900">
-                  {job.analytics?.screenedApplicants || 0}
+                  {analytics.screenedApplicants}
                 </div>
                 <CheckCircle className="w-8 h-8 text-blue-600" />
               </div>
@@ -249,7 +276,7 @@ const JobDetailPage = () => {
             <CardContent>
               <div className="flex items-center justify-between">
                 <div className="text-3xl font-bold text-slate-900">
-                  {job.analytics?.interviewsScheduled || 0}
+                  {analytics.interviewsScheduled}
                 </div>
                 <Calendar className="w-8 h-8 text-yellow-600" />
               </div>
@@ -263,7 +290,7 @@ const JobDetailPage = () => {
             <CardContent>
               <div className="flex items-center justify-between">
                 <div className="text-3xl font-bold text-slate-900">
-                  {job.analytics?.interviewsCompleted || 0}
+                  {analytics.interviewsCompleted}
                 </div>
                 <CheckCircle className="w-8 h-8 text-green-600" />
               </div>
@@ -277,7 +304,7 @@ const JobDetailPage = () => {
             <CardContent>
               <div className="flex items-center justify-between">
                 <div className="text-3xl font-bold text-slate-900">
-                  {job.analytics?.topCandidates || 0}
+                  {analytics.topCandidates}
                 </div>
                 <TrendingUp className="w-8 h-8 text-purple-600" />
               </div>
@@ -327,11 +354,11 @@ const JobDetailPage = () => {
               <CardContent>
                 <div className="space-y-2">
                   {[
-                    { label: 'Applied', count: job.analytics?.totalApplicants || 0, color: 'bg-indigo-600' },
-                    { label: 'Screened', count: job.analytics?.screenedApplicants || 0, color: 'bg-blue-600' },
-                    { label: 'Interview Scheduled', count: job.analytics?.interviewsScheduled || 0, color: 'bg-yellow-600' },
-                    { label: 'Interviewed', count: job.analytics?.interviewsCompleted || 0, color: 'bg-green-600' },
-                    { label: 'Recommended', count: job.analytics?.topCandidates || 0, color: 'bg-purple-600' }
+                    { label: 'Applied', count: analytics.totalApplicants, color: 'bg-indigo-600' },
+                    { label: 'Screened', count: analytics.screenedApplicants, color: 'bg-blue-600' },
+                    { label: 'Interview Scheduled', count: analytics.interviewsScheduled, color: 'bg-yellow-600' },
+                    { label: 'Interviewed', count: analytics.interviewsCompleted, color: 'bg-green-600' },
+                    { label: 'Recommended', count: analytics.topCandidates, color: 'bg-purple-600' }
                   ].map((stage, index) => (
                     <div key={index}>
                       <div className="flex items-center justify-between mb-1">
@@ -342,18 +369,118 @@ const JobDetailPage = () => {
                         <div
                           className={`h-full ${stage.color} transition-all`}
                           style={{
-                            width: `${job.analytics?.totalApplicants > 0 ? (stage.count / job.analytics.totalApplicants) * 100 : 0}%`
+                            width: `${analytics.totalApplicants > 0 ? (stage.count / analytics.totalApplicants) * 100 : 0}%`
                           }}
                         />
                       </div>
                     </div>
                   ))}
                 </div>
-                <Button className="w-full mt-4" variant="outline">
-                  View All Candidates
+                <Button 
+                  className="w-full mt-4" 
+                  variant="outline"
+                  onClick={() => navigate(`/dashboard/candidates?jobId=${id}`)}
+                >
+                  View All Candidates ({candidates.length})
                 </Button>
               </CardContent>
             </Card>
+
+            {/* Recent Candidates */}
+            {candidates.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Recent Applicants</CardTitle>
+                    <Badge variant="secondary">{candidates.length}</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {candidates.slice(0, 5).map((candidate) => (
+                      <div
+                        key={candidate._id}
+                        onClick={() => navigate(`/dashboard/candidates/${candidate._id}`)}
+                        className="p-3 border border-slate-200 rounded-lg hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer group"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h4 className="font-semibold text-slate-900 truncate group-hover:text-indigo-600 transition-colors">
+                                {candidate.name || 'Unknown'}
+                              </h4>
+                              {candidate.matchScore >= 80 && (
+                                <Star className="w-4 h-4 text-yellow-500 fill-yellow-500 flex-shrink-0" />
+                              )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
+                              {candidate.email && (
+                                <span className="flex items-center gap-1 truncate">
+                                  <Mail className="w-3 h-3 flex-shrink-0" />
+                                  <span className="truncate">{candidate.email}</span>
+                                </span>
+                              )}
+                              {candidate.phone && (
+                                <span className="flex items-center gap-1">
+                                  <Phone className="w-3 h-3 flex-shrink-0" />
+                                  {candidate.phone}
+                                </span>
+                              )}
+                            </div>
+                            {candidate.location && (
+                              <div className="flex items-center gap-1 text-xs text-slate-500 mt-1">
+                                <MapPinIcon className="w-3 h-3" />
+                                {candidate.location}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-col items-end gap-2 ml-3">
+                            {candidate.matchScore > 0 && (
+                              <Badge 
+                                className={
+                                  candidate.matchScore >= 80 ? 'bg-green-100 text-green-800' :
+                                  candidate.matchScore >= 60 ? 'bg-amber-100 text-amber-800' :
+                                  candidate.matchScore >= 40 ? 'bg-orange-100 text-orange-800' :
+                                  'bg-red-100 text-red-800'
+                                }
+                              >
+                                {candidate.matchScore}%
+                              </Badge>
+                            )}
+                            <Badge variant="outline" className="text-xs">
+                              {candidate.status || 'New'}
+                            </Badge>
+                          </div>
+                        </div>
+                        {candidate.skills && candidate.skills.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {candidate.skills.slice(0, 3).map((skill, idx) => (
+                              <Badge key={idx} variant="secondary" className="text-xs">
+                                {skill}
+                              </Badge>
+                            ))}
+                            {candidate.skills.length > 3 && (
+                              <Badge variant="secondary" className="text-xs">
+                                +{candidate.skills.length - 3} more
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {candidates.length > 5 && (
+                      <Button
+                        variant="link"
+                        className="w-full text-indigo-600 hover:text-indigo-700"
+                        onClick={() => navigate(`/dashboard/candidates?jobId=${id}`)}
+                      >
+                        View All {candidates.length} Applicants <ExternalLink className="w-4 h-4 ml-1" />
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Sidebar */}

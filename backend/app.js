@@ -64,12 +64,16 @@ app.use(helmet());
 // More lenient in development, stricter in production
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: process.env.NODE_ENV === 'production' ? 200 : 10000, // 10000 for dev, 200 for production
+    max: process.env.NODE_ENV === 'production' ? 200 : 50000, // 50000 for dev (essentially unlimited), 200 for production
     message: { error: 'Too many requests, please try again after 15 minutes' },
     standardHeaders: 'draft-7', // Updated for Express 5 compatibility
     legacyHeaders: false,
     skipSuccessfulRequests: false,
-    validate: { xForwardedForHeader: false }
+    validate: { xForwardedForHeader: false },
+    skip: (req) => {
+        // Skip rate limiting for health checks and in development
+        return req.path === '/health' || process.env.NODE_ENV === 'development';
+    }
 });
 app.use(limiter);
 

@@ -12,12 +12,13 @@ import {
 
 const router = Router();
 
-// 1. Apply 'protect' to everything below this line
-router.use(protect); 
-
-// Everyone can view jobs
+// PUBLIC ROUTES - No authentication required
+// Allow anyone to view job listings and job details (for public application pages)
 router.get('/', getAllJobs);
 router.get('/:id', getJobById);
+
+// PROTECTED ROUTES - Require authentication
+router.use(protect); 
 
 // Only Admin & Recruiter can CREATE or EDIT jobs
 router.post('/', authorize('admin', 'recruiter'), createJob);

@@ -49,6 +49,7 @@ export const CandidatesView = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sourceFilter, setSourceFilter] = useState('all');
+  const [positionFilter, setPositionFilter] = useState('all');
   const [sortBy, setSortBy] = useState('date');
   const [sortOrder, setSortOrder] = useState('desc');
 
@@ -76,6 +77,15 @@ export const CandidatesView = () => {
     }
   };
 
+  // Get unique positions from candidates
+  const uniquePositions = useMemo(() => {
+    const positions = candidates
+      .map(c => c.positionApplied)
+      .filter(Boolean)
+      .filter((v, i, arr) => arr.indexOf(v) === i);
+    return positions.sort();
+  }, [candidates]);
+
   // --- FILTERING & SORTING LOGIC ---
   const filteredAndSortedCandidates = useMemo(() => {
     let filtered = candidates.filter(candidate => {
@@ -86,11 +96,12 @@ export const CandidatesView = () => {
 
       const matchesStatus = statusFilter === 'all' || candidate.status === statusFilter;
       const matchesSource = sourceFilter === 'all' || candidate.source === sourceFilter;
+      const matchesPosition = positionFilter === 'all' || candidate.positionApplied === positionFilter;
       
       // Filter by jobId if provided in URL
       const matchesJob = !jobIdFilter || candidate.jobId === jobIdFilter;
 
-      return matchesSearch && matchesStatus && matchesSource && matchesJob;
+      return matchesSearch && matchesStatus && matchesSource && matchesPosition && matchesJob;
     });
 
     filtered.sort((a, b) => {
@@ -110,12 +121,13 @@ export const CandidatesView = () => {
     });
 
     return filtered;
-  }, [candidates, searchQuery, statusFilter, sourceFilter, sortBy, sortOrder]);
+  }, [candidates, searchQuery, statusFilter, sourceFilter, positionFilter, sortBy, sortOrder, jobIdFilter]);
 
   const clearFilters = () => {
     setSearchQuery('');
     setStatusFilter('all');
     setSourceFilter('all');
+    setPositionFilter('all');
     setSortBy('date');
     setSortOrder('desc');
   };
@@ -368,7 +380,7 @@ export const CandidatesView = () => {
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
             
             {/* Search */}
-            <div className="md:col-span-4 relative">
+            <div className="md:col-span-3 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
               <input
                 type="text"
@@ -394,6 +406,20 @@ export const CandidatesView = () => {
                 <option value="Hired">Hired</option>
                 <option value="Rejected">Rejected</option>
                 <option value="Applied">Applied</option>
+              </select>
+            </div>
+
+            {/* Position Filter */}
+            <div className="md:col-span-2">
+              <select 
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-600"
+                value={positionFilter}
+                onChange={(e) => setPositionFilter(e.target.value)}
+              >
+                <option value="all">All Positions</option>
+                {uniquePositions.map((position) => (
+                  <option key={position} value={position}>{position}</option>
+                ))}
               </select>
             </div>
 
@@ -434,7 +460,7 @@ export const CandidatesView = () => {
 
             {/* Clear Filters */}
             <div className="md:col-span-1 flex items-center justify-center">
-              {(searchQuery || statusFilter !== 'all' || sourceFilter !== 'all') && (
+              {(searchQuery || statusFilter !== 'all' || sourceFilter !== 'all' || positionFilter !== 'all') && (
                 <button 
                   onClick={clearFilters}
                   className="p-2 text-slate-400 hover:text-red-500 transition-colors"

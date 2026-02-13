@@ -2,8 +2,115 @@ import { Router } from 'express';
 import { protect, authorize } from '../middleware/auth.js';
 import multer from 'multer';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const router = Router();
+
+// Try to load BullMQ queue (optional)
+let resumeQueue = null;
+try {
+  const { Queue } = await import('bullmq');
+  resumeQueue = new Queue('resume-processing', {
+    connection: {
+      host: process.env.REDIS_HOST || 'localhost',
+      port: parseInt(process.env.REDIS_PORT) || 6379
+    }
+  });
+  // Test the connection immediately
+  await resumeQueue.getJobCounts();
+  console.log('✅ Connected to Redis for resume processing queue');
+} catch (error) {
+  console.warn('⚠️  Redis/BullMQ not available:', error.message);
+  console.warn('   AI resume processing will run inline (synchronously).');
+  resumeQueue = null;
+}
+
+// Inline resume processing function (fallback when Redis/BullMQ not available)
+async function processResumeInline(candidateId, filePath, fileName, mimeType, jobId) {
+  try {
+    const { promises: fs } = await import('fs');
+    const { extractText } = await import('../utils/textExtractor.js');
+    const { analyzeResume } = await import('../utils/aiService.js');
+    const { default: Candidate } = await import('../models/candidate.js');
+    
+    // 1. Read file
+    const backendDir = path.resolve(__dirname, '..');
+    const absolutePath = path.resolve(backendDir, filePath);
+    console.log(`📄 [Inline] Reading file: ${absolutePath}`);
+    const fileBuffer = await fs.readFile(absolutePath);
+
+    // 2. Extract text
+    console.log(`🔍 [Inline] Extracting text from ${fileName}...`);
+    const rawText = await extractText(fileBuffer, mimeType);
+    console.log(`✅ [Inline] Extracted ${rawText.length} characters`);
+
+    if (!rawText || rawText.length < 20) {
+      console.warn('⚠️  [Inline] Extracted text too short, skipping AI analysis');
+      await Candidate.findByIdAndUpdate(candidateId, { processingStatus: 'Failed', resumeText: rawText });
+      return;
+    }
+
+    // 3. Fetch job description
+    let jobDescription = "General position";
+    if (jobId) {
+      try {
+        const { default: Job } = await import('../models/job.js');
+        const job = await Job.findById(jobId);
+        if (job) {
+          jobDescription = `${job.title}\n\n${job.description}\n\nRequirements:\n${job.requirements || 'Not specified'}`;
+          console.log(`📌 [Inline] Job found: ${job.title}`);
+        }
+      } catch (e) {
+        console.warn(`⚠️  [Inline] Could not fetch job: ${e.message}`);
+      }
+    }
+
+    // 4. AI Analysis
+    console.log(`🤖 [Inline] Analyzing resume with AI...`);
+    const aiData = await analyzeResume(rawText, jobDescription);
+    console.log(`✅ [Inline] AI Analysis complete - Match Score: ${aiData.matchScore}%`);
+
+    // 5. Update candidate
+    const updateData = {
+      resumeText: rawText,
+      processingStatus: 'Completed',
+      status: 'Screening',
+      matchScore: aiData.matchScore || 0,
+      skills: aiData.skills || [],
+      experience: aiData.experience || [],
+      redFlags: aiData.redFlags || [],
+    };
+    if (aiData.name && aiData.name !== 'Unknown') updateData.name = aiData.name;
+    if (aiData.phone) updateData.phone = aiData.phone;
+    if (aiData.summary) updateData.summary = aiData.summary;
+    
+    // Only update email if it won't cause duplicate key conflict
+    if (aiData.email && !aiData.email.includes('placeholder')) {
+      const existing = await Candidate.findOne({ email: aiData.email, jobId, _id: { $ne: candidateId } });
+      if (!existing) updateData.email = aiData.email;
+    }
+
+    try {
+      await Candidate.findByIdAndUpdate(candidateId, updateData);
+    } catch (updateErr) {
+      if (updateErr.code === 11000) {
+        delete updateData.email;
+        await Candidate.findByIdAndUpdate(candidateId, updateData);
+      } else throw updateErr;
+    }
+    console.log(`✅ [Inline] Candidate ${candidateId} updated with score: ${updateData.matchScore}%`);
+  } catch (error) {
+    console.error(`❌ [Inline] Processing failed:`, error.message);
+    try {
+      const { default: Candidate } = await import('../models/candidate.js');
+      await Candidate.findByIdAndUpdate(candidateId, { processingStatus: 'Failed' });
+    } catch (e) { /* ignore */ }
+  }
+}
 
 // Configure multer for resume uploads
 const storage = multer.diskStorage({
@@ -34,8 +141,14 @@ const upload = multer({
 
 // PUBLIC ROUTE - Job Application (No auth required)
 router.post('/apply', upload.single('resume'), async (req, res) => {
+    console.log('📝 Received application submission');
+    console.log('Request body:', req.body);
+    console.log('File:', req.file ? req.file.originalname : 'No file');
+    
     try {
         const { name, email, phone, location, linkedIn, coverLetter, jobId, positionApplied, source } = req.body;
+        
+        console.log('Creating candidate with jobId:', jobId);
         
         // Import Candidate model dynamically
         const { default: Candidate } = await import('../models/candidate.js');
@@ -62,6 +175,37 @@ router.post('/apply', upload.single('resume'), async (req, res) => {
         }
 
         const candidate = await Candidate.create(candidateData);
+        
+        // Trigger AI processing if resume is uploaded
+        if (req.file && jobId) {
+          let queued = false;
+          
+          // Try BullMQ queue first (async background processing)
+          if (resumeQueue) {
+            try {
+              await resumeQueue.add('process-resume', {
+                candidateId: candidate._id.toString(),
+                filePath: req.file.path,
+                fileName: req.file.originalname,
+                mimeType: req.file.mimetype,
+                jobId: jobId
+              });
+              console.log(`✅ Resume processing job added to queue for candidate: ${candidate._id}`);
+              queued = true;
+            } catch (queueError) {
+              console.warn('⚠️  Queue failed, falling back to inline processing:', queueError.message);
+            }
+          }
+          
+          // Fallback: process inline if queue not available
+          if (!queued) {
+            console.log('🔄 Processing resume inline (no queue)...');
+            // Fire-and-forget inline processing so the response isn't delayed
+            processResumeInline(candidate._id.toString(), req.file.path, req.file.originalname, req.file.mimetype, jobId)
+              .then(() => console.log(`✅ Inline resume processing complete for ${candidate._id}`))
+              .catch(err => console.error(`❌ Inline processing failed:`, err.message));
+          }
+        }
         
         res.status(201).json({
             success: true,

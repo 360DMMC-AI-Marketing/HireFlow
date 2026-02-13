@@ -1,4 +1,12 @@
 import Job from '../models/job.js';
+import Candidate from '../models/candidate.js';
+import { GoogleGenerativeAI } from '@google/generative-ai'; // Added Import
+import dotenv from 'dotenv'; // Added Import
+
+dotenv.config();
+
+// Initialize Gemini (Make sure GEMINI_API_KEY is in your .env file)
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // @desc    Get all jobs with filters
 // @route   GET /api/jobs
@@ -20,8 +28,26 @@ export const getAllJobs = async (req, res) => {
     const jobs = await Job.find(query)
       .populate('createdBy', 'firstName lastName email')
       .sort(sortConfig);
+    
+    // Enrich jobs with real applicant counts from Candidate collection
+    const jobIds = jobs.map(j => j._id);
+    const counts = await Candidate.aggregate([
+      { $match: { jobId: { $in: jobIds } } },
+      { $group: { _id: '$jobId', count: { $sum: 1 } } }
+    ]);
+    const countMap = {};
+    counts.forEach(c => { countMap[c._id.toString()] = c.count; });
+    
+    const enrichedJobs = jobs.map(job => {
+      const jobObj = job.toObject();
+      jobObj.analytics = {
+        ...jobObj.analytics,
+        totalApplicants: countMap[job._id.toString()] || 0
+      };
+      return jobObj;
+    });
       
-    res.status(200).json(jobs);
+    res.status(200).json(enrichedJobs);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -38,7 +64,15 @@ export const getJobById = async (req, res) => {
       return res.status(404).json({ message: 'Job not found' });
     }
     
-    res.status(200).json(job);
+    // Enrich with real applicant count
+    const applicantCount = await Candidate.countDocuments({ jobId: job._id });
+    const jobObj = job.toObject();
+    jobObj.analytics = {
+      ...jobObj.analytics,
+      totalApplicants: applicantCount
+    };
+    
+    res.status(200).json(jobObj);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -216,23 +250,49 @@ export const saveDraft = async (req, res) => {
   }
 };
 
-// @desc    Generate job description using AI (placeholder)
+// --- THIS IS THE NEW AI FUNCTION (Replaces the old placeholder) ---
+
+// @desc    Generate job description using AI
 // @route   POST /api/jobs/generate-description
 export const generateDescription = async (req, res) => {
   try {
-    const { title, responsibilities, skills } = req.body;
+    const { title, skills, keywords } = req.body; 
+
+    if (!title) return res.status(400).json({ message: 'Job title is required' });
+
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+    const prompt = `
+      You are an expert HR Recruiter. Write a professional Job Description for a "${title}".
+      
+      Requirements to include: ${skills?.join(', ') || 'Standard industry skills'}
+      Keywords/Vibe: ${keywords || 'Professional'}
+      
+      Output ONLY valid JSON:
+      {
+        "description": "2 paragraph engaging company intro and role overview.",
+        "responsibilities": "Bullet points of daily tasks (HTML format <ul><li>...</li></ul>)",
+        "requirements": "Bullet points of required skills (HTML format <ul><li>...</li></ul>)",
+        "benefits": "Standard benefits list (HTML format <ul><li>...</li></ul>)"
+      }
+    `;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text().replace(/```json/g, '').replace(/```/g, '').trim();
     
-    // Placeholder for AI generation - would integrate with OpenAI/similar
-    const generatedDescription = {
-      description: `We are seeking a talented ${title} to join our team...`,
-      responsibilities: responsibilities || 'Key responsibilities include...',
-      requirements: `Required skills: ${skills?.join(', ') || 'TBD'}`,
-      benefits: 'Competitive salary, health insurance, flexible working hours...'
-    };
-    
-    res.status(200).json(generatedDescription);
+    const jsonResponse = JSON.parse(text);
+
+    res.status(200).json(jsonResponse);
+
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("AI Generation Failed:", error);
+    // Fallback if AI fails (so the app doesn't crash)
+    res.status(200).json({
+      description: `We are looking for a talented ${title} to join our team.`,
+      responsibilities: "<ul><li>TBD</li></ul>",
+      requirements: "<ul><li>TBD</li></ul>",
+      benefits: "<ul><li>Competitive Salary</li></ul>"
+    });
   }
 };
-

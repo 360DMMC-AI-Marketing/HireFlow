@@ -24,17 +24,18 @@ export const getDashboardStats = async (req, res) => {
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
         
-        // Since candidate schema doesn't have status or interview fields yet,
-        // we'll return 0 for now. You can update this when you add those fields.
-        const todayInterviews = 0;
+        // Count interviews (candidates in Interview status)
+        const todayInterviews = await Candidate.countDocuments({ status: 'Interview' });
         
         // Count hired this month
         const startOfMonth = new Date();
         startOfMonth.setDate(1);
         startOfMonth.setHours(0, 0, 0, 0);
         
-        // Since candidate schema doesn't have status field yet, return 0
-        const hiredThisMonth = 0;
+        const hiredThisMonth = await Candidate.countDocuments({ 
+            status: 'Hired',
+            updatedAt: { $gte: startOfMonth }
+        });
         
         // Calculate changes (compare with previous period)
         const fourteenDaysAgo = new Date();
@@ -90,7 +91,7 @@ export const getApplicationVelocity = async (req, res) => {
     try {
         // Get data for the last 7 days
         const data = [];
-        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         
         for (let i = 6; i >= 0; i--) {
             const date = new Date();
@@ -103,11 +104,14 @@ export const getApplicationVelocity = async (req, res) => {
                 createdAt: { $gte: date, $lt: nextDate }
             });
             
-            // Since we don't have a hired status yet, we'll use 0
-            const hires = 0;
+            // Count hired candidates for this day
+            const hires = await Candidate.countDocuments({
+                status: 'Hired',
+                updatedAt: { $gte: date, $lt: nextDate }
+            });
             
             data.push({
-                name: days[6 - i],
+                name: dayNames[date.getDay()],
                 applicants,
                 hires
             });
@@ -127,13 +131,14 @@ export const getApplicationVelocity = async (req, res) => {
     }
 };
 
-// Get recent candidates for active pipeline
+// Get recent candidates for active pipeline (sorted by best match score)
 export const getRecentCandidates = async (req, res) => {
     try {
         const candidates = await Candidate.find()
-            .sort({ createdAt: -1 })
-            .limit(3)
-            .select('name email resume_data scores createdAt');
+            .sort({ matchScore: -1, createdAt: -1 })
+            .limit(5)
+            .populate('jobId', 'title')
+            .select('name email matchScore status positionApplied jobId createdAt');
         
         const formatted = candidates.map(c => {
             const nameParts = c.name ? c.name.split(' ') : ['Unknown'];
@@ -143,9 +148,9 @@ export const getRecentCandidates = async (req, res) => {
             return {
                 id: c._id,
                 name: c.name || 'Unknown Candidate',
-                role: 'Candidate', // Default since not in schema
-                status: 'Applied', // Default since not in schema
-                score: Math.floor(Math.random() * 30) + 70, // Random score since no scoring system yet
+                role: c.positionApplied || (c.jobId?.title) || 'Candidate',
+                status: c.status || 'New',
+                score: c.matchScore || 0,
                 avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(firstName)}+${encodeURIComponent(lastName)}&background=random`
             };
         });

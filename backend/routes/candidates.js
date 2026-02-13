@@ -61,7 +61,9 @@ async function processResumeInline(candidateId, filePath, fileName, mimeType, jo
         const { default: Job } = await import('../models/job.js');
         const job = await Job.findById(jobId);
         if (job) {
-          jobDescription = `${job.title}\n\n${job.description}\n\nRequirements:\n${job.requirements || 'Not specified'}`;
+          const reqs = Array.isArray(job.requirements) ? job.requirements.join('\n- ') : (job.requirements || 'Not specified');
+          const skills = job.screeningCriteria?.requiredSkills?.join(', ') || '';
+          jobDescription = `${job.title}\n\n${job.description}\n\nRequirements:\n- ${reqs}${skills ? `\n\nRequired Skills: ${skills}` : ''}${job.screeningCriteria?.minYearsExperience ? `\nMinimum Experience: ${job.screeningCriteria.minYearsExperience} years` : ''}`;
           console.log(`📌 [Inline] Job found: ${job.title}`);
         }
       } catch (e) {
@@ -140,22 +142,30 @@ const upload = multer({
 });
 
 // PUBLIC ROUTE - Job Application (No auth required)
-router.post('/apply', upload.single('resume'), async (req, res) => {
+router.post('/apply', (req, res, next) => {
+    // Wrap multer to catch file upload errors gracefully
+    upload.single('resume')(req, res, (err) => {
+        if (err) {
+            console.error('📎 File upload error:', err.message);
+            return res.status(400).json({
+                success: false,
+                message: err.message || 'File upload failed'
+            });
+        }
+        next();
+    });
+}, async (req, res) => {
     console.log('📝 Received application submission');
-    console.log('Request body:', req.body);
-    console.log('File:', req.file ? req.file.originalname : 'No file');
     
     try {
         const { name, email, phone, location, linkedIn, coverLetter, jobId, positionApplied, source } = req.body;
-        
-        console.log('Creating candidate with jobId:', jobId);
         
         // Import Candidate model dynamically
         const { default: Candidate } = await import('../models/candidate.js');
         
         const candidateData = {
             name: name || 'Unknown',
-            email: email || `candidate_${Date.now()}@placeholder.com`, // Generate unique email if not provided
+            email: email || `candidate_${Date.now()}@placeholder.com`,
             phone: phone || '',
             location: location || '',
             linkedIn: linkedIn || '',
@@ -163,7 +173,7 @@ router.post('/apply', upload.single('resume'), async (req, res) => {
             positionApplied: positionApplied || 'General Application',
             source: source || 'HireFlow Direct',
             status: 'New',
-            matchScore: 0, // Will be calculated by AI later
+            matchScore: 0,
             appliedDate: new Date(),
             resumePath: req.file ? req.file.path : null,
             resumeFileName: req.file ? req.file.originalname : null
@@ -174,7 +184,28 @@ router.post('/apply', upload.single('resume'), async (req, res) => {
             candidateData.jobId = jobId;
         }
 
-        const candidate = await Candidate.create(candidateData);
+        let candidate;
+        try {
+            candidate = await Candidate.create(candidateData);
+        } catch (createErr) {
+            // Handle duplicate application (same email + same job)
+            if (createErr.code === 11000) {
+                console.warn('⚠️  Duplicate application detected:', email, 'for job', jobId);
+                return res.status(409).json({
+                    success: false,
+                    message: 'You have already applied for this position with this email address.'
+                });
+            }
+            // Handle validation errors
+            if (createErr.name === 'ValidationError') {
+                const messages = Object.values(createErr.errors).map(e => e.message);
+                return res.status(400).json({
+                    success: false,
+                    message: messages.join(', ')
+                });
+            }
+            throw createErr;
+        }
         
         // Trigger AI processing if resume is uploaded
         if (req.file && jobId) {
@@ -285,8 +316,26 @@ router.post('/', authorize('admin', 'recruiter'), async (req, res) => {
     }
 });
 
-router.patch('/bulk-updates', authorize('admin', 'recruiter'), (req, res) => {
-    res.send('Bulk update');
+router.patch('/bulk-updates', authorize('admin', 'recruiter'), async (req, res) => {
+    try {
+        const { ids, updates } = req.body;
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ success: false, message: 'No candidate IDs provided' });
+        }
+        const { default: Candidate } = await import('../models/candidate.js');
+        const result = await Candidate.updateMany(
+            { _id: { $in: ids } },
+            { $set: updates }
+        );
+        res.json({
+            success: true,
+            message: `${result.modifiedCount} candidates updated successfully`,
+            modifiedCount: result.modifiedCount
+        });
+    } catch (error) {
+        console.error('Error bulk updating candidates:', error);
+        res.status(500).json({ success: false, message: 'Error updating candidates', error: error.message });
+    }
 });
 
 router.delete('/bulk', authorize('admin', 'recruiter'), async (req, res) => {
@@ -308,8 +357,27 @@ router.delete('/bulk', authorize('admin', 'recruiter'), async (req, res) => {
     }
 });
 
-router.patch('/:id/status', authorize('admin', 'recruiter'), (req, res) => {
-    res.send('Update status');
+router.patch('/:id/status', authorize('admin', 'recruiter'), async (req, res) => {
+    try {
+        const { status } = req.body;
+        const validStatuses = ['New', 'Screening', 'Interview', 'Offer', 'Hired', 'Rejected', 'Applied'];
+        if (!status || !validStatuses.includes(status)) {
+            return res.status(400).json({ success: false, message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+        }
+        const { default: Candidate } = await import('../models/candidate.js');
+        const candidate = await Candidate.findByIdAndUpdate(
+            req.params.id,
+            { status },
+            { new: true }
+        );
+        if (!candidate) {
+            return res.status(404).json({ success: false, message: 'Candidate not found' });
+        }
+        res.json({ success: true, candidate });
+    } catch (error) {
+        console.error('Error updating candidate status:', error);
+        res.status(500).json({ success: false, message: 'Error updating status', error: error.message });
+    }
 });
 
 // ... rest of your routes

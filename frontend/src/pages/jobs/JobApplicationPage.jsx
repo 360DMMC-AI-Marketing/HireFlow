@@ -4,13 +4,13 @@ import api from '@/utils/axios';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Upload, Briefcase, MapPin, DollarSign, CheckCircle } from 'lucide-react';
+import { Upload, Briefcase, MapPin, DollarSign, CheckCircle } from 'lucide-react';
 
 const JobApplicationPage = () => {
   const { jobId } = useParams();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const sourceParam = searchParams.get('source') || 'HireFlow Direct';
+  
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -62,7 +62,6 @@ const JobApplicationPage = () => {
     setSubmitting(true);
     
     try {
-      // Create FormData for file upload
       const submitData = new FormData();
       submitData.append('name', formData.name);
       submitData.append('email', formData.email);
@@ -78,17 +77,21 @@ const JobApplicationPage = () => {
         submitData.append('resume', formData.resumeFile);
       }
 
-      // Submit application
       await api.post('/candidates/apply', submitData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
       setSubmitted(true);
     } catch (error) {
       console.error('Error submitting application:', error);
-      alert('Error submitting application. Please try again.');
+      const serverMsg = error.response?.data?.message;
+      if (error.response?.status === 409) {
+        alert(serverMsg || 'You have already applied for this position.');
+      } else if (error.response?.status === 400) {
+        alert(serverMsg || 'Please check your input and try again.');
+      } else {
+        alert(serverMsg || 'Error submitting application. Please try again.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -112,7 +115,7 @@ const JobApplicationPage = () => {
           <div className="text-red-500 text-6xl mb-4">⚠️</div>
           <h1 className="text-2xl font-bold text-slate-900 mb-2">Job Not Found</h1>
           <p className="text-slate-600 mb-6">{error}</p>
-          <Button onClick={() => navigate('/')}>Back to Home</Button>
+          {/* Button Removed: Keeps user here instead of sending to Admin Login */}
         </div>
       </div>
     );
@@ -130,9 +133,7 @@ const JobApplicationPage = () => {
             <p className="text-slate-600 mb-6">
               Thank you for applying to <strong>{job.title}</strong>. We'll review your application and get back to you soon.
             </p>
-            <Button onClick={() => navigate('/')} className="w-full">
-              Back to Home
-            </Button>
+            <p className="text-sm text-slate-400">You can now close this tab.</p>
           </CardContent>
         </Card>
       </div>
@@ -185,66 +186,33 @@ const JobApplicationPage = () => {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               
-              {/* Personal Information */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">Full Name *</label>
-                  <Input 
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    placeholder="John Doe"
-                    required
-                  />
+                  <Input name="name" value={formData.name} onChange={handleChange} placeholder="John Doe" required />
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">Email Address *</label>
-                  <Input 
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="john@example.com"
-                    required
-                  />
+                  <Input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="john@example.com" required />
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">Phone Number *</label>
-                  <Input 
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleChange}
-                    placeholder="+1 (555) 123-4567"
-                    required
-                  />
+                  <Input type="tel" name="phone" value={formData.phone} onChange={handleChange} placeholder="+1 (555) 123-4567" required />
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">Location</label>
-                  <Input 
-                    name="location"
-                    value={formData.location}
-                    onChange={handleChange}
-                    placeholder="New York, NY"
-                  />
+                  <Input name="location" value={formData.location} onChange={handleChange} placeholder="New York, NY" />
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium text-slate-700">LinkedIn Profile</label>
-                  <Input 
-                    type="url"
-                    name="linkedIn"
-                    value={formData.linkedIn}
-                    onChange={handleChange}
-                    placeholder="https://linkedin.com/in/johndoe"
-                  />
+                  <Input type="url" name="linkedIn" value={formData.linkedIn} onChange={handleChange} placeholder="https://linkedin.com/in/johndoe" />
                 </div>
               </div>
 
-              {/* Resume Upload */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Resume/CV *</label>
                 <div className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center hover:border-indigo-400 transition-colors">
@@ -253,53 +221,21 @@ const JobApplicationPage = () => {
                     {formData.resumeFile ? formData.resumeFile.name : 'Click to upload or drag and drop'}
                   </p>
                   <p className="text-sm text-slate-500">PDF, DOC, DOCX (Max 5MB)</p>
-                  <input 
-                    type="file" 
-                    onChange={handleFileChange}
-                    accept=".pdf,.doc,.docx"
-                    className="hidden"
-                    id="resume-upload"
-                    required
-                  />
-                  <Button 
-                    type="button"
-                    variant="outline"
-                    className="mt-4"
-                    onClick={() => document.getElementById('resume-upload').click()}
-                  >
+                  <input type="file" onChange={handleFileChange} accept=".pdf,.doc,.docx" className="hidden" id="resume-upload" required />
+                  <Button type="button" variant="outline" className="mt-4" onClick={() => document.getElementById('resume-upload').click()}>
                     Choose File
                   </Button>
                 </div>
               </div>
 
-              {/* Cover Letter */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Cover Letter (Optional)</label>
-                <textarea
-                  name="coverLetter"
-                  value={formData.coverLetter}
-                  onChange={handleChange}
-                  rows={6}
-                  className="w-full p-3 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="Tell us why you're a great fit for this role..."
-                />
+                <textarea name="coverLetter" value={formData.coverLetter} onChange={handleChange} rows={6} className="w-full p-3 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Tell us why you're a great fit for this role..." />
               </div>
 
-              {/* Submit Button */}
               <div className="flex justify-end gap-4 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => navigate('/')}
-                  disabled={submitting}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={submitting}
-                  className="bg-indigo-600 hover:bg-indigo-700"
-                >
+                {/* Cancel button removed as it also redirected to Home */}
+                <Button type="submit" disabled={submitting} className="bg-indigo-600 hover:bg-indigo-700 w-full md:w-auto">
                   {submitting ? 'Submitting...' : 'Submit Application'}
                 </Button>
               </div>

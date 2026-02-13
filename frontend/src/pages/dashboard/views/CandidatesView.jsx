@@ -6,13 +6,12 @@ import api from '@/utils/axios';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { 
-  Plus, Brain, FileText, Video, LayoutGrid, List, 
+  Plus, Brain, FileText, LayoutGrid, List, 
   MoreHorizontal, Calendar, Mail, Phone, Search, X,
   Download, Trash2, Tag, Users, Eye, ThumbsUp, ThumbsDown, Star
 } from "lucide-react";
 import { Card } from "../shared/Card";
 import { ImageWithFallback } from "@/components/figma/ImageWithFallback";
-import { PIPELINE_STAGES } from "@/utils/data/dashboardData";
 import {
   Table,
   TableBody,
@@ -216,24 +215,8 @@ export const CandidatesView = () => {
 
   const isAllSelected = selectedCandidates.length === filteredAndSortedCandidates.length && filteredAndSortedCandidates.length > 0;
 
-  // Use fallback data if API returns empty
-  const allCandidates = candidates.length > 0 ? candidates : PIPELINE_STAGES.flatMap(stage => 
-    stage.candidates.map(candidate => ({
-      _id: candidate.id,
-      name: candidate.name,
-      email: candidate.email || 'No email',
-      role: candidate.role,
-      status: stage.name,
-      matchScore: candidate.score,
-      source: 'HireFlow Direct',
-      avatar: candidate.avatar,
-      appliedDate: new Date(),
-      createdAt: new Date(),
-      positionApplied: candidate.role,
-      stageId: stage.id,
-      stageName: stage.name
-    }))
-  );
+  // Use API data directly
+  const allCandidates = candidates;
 
   if (loading) {
     return (
@@ -275,7 +258,7 @@ export const CandidatesView = () => {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Talent Pipeline</h1>
           <p className="text-slate-500 text-sm font-medium mt-1">
-            {viewMode === 'pipeline' ? 'Drag and drop to move candidates' : `${allCandidates.length} candidates • ${selectedCandidates.length} selected`}
+            {viewMode === 'pipeline' ? 'Candidates organized by status' : `${allCandidates.length} candidates • ${selectedCandidates.length} selected`}
           </p>
         </div>
         
@@ -477,55 +460,93 @@ export const CandidatesView = () => {
       {/* =========================================================
           MODE 1: PIPELINE VIEW (Your original Kanban Board)
          ========================================================= */}
-      {viewMode === 'pipeline' && (
+      {viewMode === 'pipeline' && (() => {
+        const pipelineStages = [
+          { id: 'New', name: 'New' },
+          { id: 'Applied', name: 'Applied' },
+          { id: 'Screening', name: 'Screening' },
+          { id: 'Interview', name: 'Interview' },
+          { id: 'Offer', name: 'Offer' },
+          { id: 'Hired', name: 'Hired' },
+          { id: 'Rejected', name: 'Rejected' },
+        ];
+        // Group filtered candidates by their status
+        const grouped = {};
+        pipelineStages.forEach(s => { grouped[s.id] = []; });
+        filteredCandidates.forEach(c => {
+          const status = c.status || 'New';
+          if (grouped[status]) grouped[status].push(c);
+          else grouped['New'].push(c);
+        });
+        
+        return (
         <div className="flex gap-6 overflow-x-auto pb-8 custom-scrollbar">
-          {PIPELINE_STAGES.map((stage) => (
+          {pipelineStages.map((stage) => (
             <div key={stage.id} className="min-w-[280px] w-80 shrink-0">
               <div className="flex items-center justify-between mb-4 px-2">
                 <h3 className="font-bold text-slate-900 flex items-center gap-2">
                   {stage.name}
                   <span className="text-[10px] bg-slate-100 text-slate-500 py-0.5 px-2 rounded-full font-black">
-                    {stage.candidates.length}
+                    {grouped[stage.id].length}
                   </span>
                 </h3>
-                <Plus className="w-4 h-4 text-slate-400 cursor-pointer hover:text-indigo-600" />
               </div>
               
               <div className="space-y-3">
-                {stage.candidates.length === 0 ? (stage.id === 'screening' && (
+                {grouped[stage.id].length === 0 ? (
                   <div className="h-24 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center text-slate-400 text-xs font-medium italic">
-                    Drop candidates here
+                    No candidates
                   </div>
-                )) : stage.candidates.map((candidate) => (
-                  <Card key={candidate.id} className="p-4 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow group">
+                ) : grouped[stage.id].map((candidate) => {
+                  const nameParts = (candidate.name || 'U').split(' ');
+                  const initials = nameParts.map(n => n[0]).join('').slice(0, 2).toUpperCase();
+                  return (
+                  <Card 
+                    key={candidate._id} 
+                    className="p-4 cursor-pointer hover:shadow-md transition-shadow group"
+                    onClick={() => navigate(`/dashboard/candidates/${candidate._id}`)}
+                  >
                     <div className="flex items-center gap-3 mb-3">
-                      <ImageWithFallback src={candidate.avatar} alt={candidate.name} className="w-8 h-8 rounded-full object-cover" />
+                      <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold">
+                        {initials}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-bold text-slate-900 truncate">{candidate.name}</h4>
-                        <p className="text-[10px] text-slate-500 truncate">{candidate.role}</p>
+                        <p className="text-[10px] text-slate-500 truncate">{candidate.positionApplied || 'No position'}</p>
                       </div>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex gap-1">
-                        <div className="w-5 h-5 rounded-md bg-indigo-50 flex items-center justify-center text-indigo-600">
-                          <FileText className="w-3 h-3" />
-                        </div>
-                        <div className="w-5 h-5 rounded-md bg-emerald-50 flex items-center justify-center text-emerald-600">
-                          <Video className="w-3 h-3" />
-                        </div>
+                        {candidate.resumePath && (
+                          <div className="w-5 h-5 rounded-md bg-indigo-50 flex items-center justify-center text-indigo-600">
+                            <FileText className="w-3 h-3" />
+                          </div>
+                        )}
+                        {candidate.email && (
+                          <div className="w-5 h-5 rounded-md bg-emerald-50 flex items-center justify-center text-emerald-600">
+                            <Mail className="w-3 h-3" />
+                          </div>
+                        )}
                       </div>
-                      <div className="flex items-center gap-1 text-xs font-black text-indigo-600">
-                        <Brain className="w-3 h-3" />
-                        {candidate.score}%
-                      </div>
+                      {candidate.matchScore > 0 && (
+                        <div className={cn("flex items-center gap-1 text-xs font-black",
+                          candidate.matchScore >= 80 ? "text-emerald-600" :
+                          candidate.matchScore >= 60 ? "text-amber-600" : "text-orange-600"
+                        )}>
+                          <Brain className="w-3 h-3" />
+                          {candidate.matchScore}%
+                        </div>
+                      )}
                     </div>
                   </Card>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))}
         </div>
-      )}
+        );
+      })()}
 
       {/* =========================================================
           MODE 2: LIST VIEW (Full Featured Table)

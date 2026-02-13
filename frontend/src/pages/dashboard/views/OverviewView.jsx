@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import { useNavigate } from "react-router-dom";
+import api from "@/utils/axios";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { TrendingUp, Briefcase, Users, Calendar, UserCheck } from "lucide-react";
@@ -21,6 +22,7 @@ function cn(...inputs) {
 }
 
 export const OverviewView = () => {
+  const navigate = useNavigate();
   const [dashboardStats, setDashboardStats] = useState(DASHBOARD_STATS);
   const [analyticsData, setAnalyticsData] = useState(ANALYTICS_DATA);
   const [recentCandidates, setRecentCandidates] = useState(RECENT_CANDIDATES);
@@ -32,20 +34,11 @@ export const OverviewView = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        // If no token, use fallback data
-        setLoading(false);
-        return;
-      }
-
-      const headers = { Authorization: `Bearer ${token}` };
-
       // Fetch all dashboard data in parallel
       const [statsRes, velocityRes, candidatesRes] = await Promise.all([
-        axios.get('http://localhost:5000/api/analytics/dashboard-stats', { headers }).catch(() => null),
-        axios.get('http://localhost:5000/api/analytics/application-velocity', { headers }).catch(() => null),
-        axios.get('http://localhost:5000/api/analytics/recent-candidates', { headers }).catch(() => null)
+        api.get('/analytics/dashboard-stats').catch(() => null),
+        api.get('/analytics/application-velocity').catch(() => null),
+        api.get('/analytics/recent-candidates').catch(() => null)
       ]);
 
       // Update dashboard stats
@@ -171,10 +164,14 @@ export const OverviewView = () => {
       </Card>
 
       <Card className="p-6">
-        <h3 className="font-bold text-slate-900 mb-6">Active Pipeline</h3>
+        <h3 className="font-bold text-slate-900 mb-6">Top Candidates</h3>
         <div className="space-y-6">
-          {recentCandidates.map((candidate) => (
-            <div key={candidate.id} className="flex items-center gap-4 group">
+          {recentCandidates.length > 0 ? recentCandidates.map((candidate) => (
+            <div 
+              key={candidate.id} 
+              className="flex items-center gap-4 group cursor-pointer hover:bg-slate-50 rounded-lg p-1 -m-1 transition-colors"
+              onClick={() => navigate(`/dashboard/candidates/${candidate.id}`)}
+            >
               <div className="relative">
                 <ImageWithFallback 
                   src={candidate.avatar} 
@@ -182,7 +179,11 @@ export const OverviewView = () => {
                   className="w-12 h-12 rounded-full object-cover border-2 border-white ring-1 ring-slate-100"
                 />
                 <div className="absolute -bottom-1 -right-1 bg-white p-0.5 rounded-full ring-1 ring-slate-100">
-                  <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                  <div className={cn("w-3 h-3 rounded-full", 
+                    candidate.score >= 80 ? "bg-emerald-500" :
+                    candidate.score >= 60 ? "bg-amber-500" :
+                    candidate.score > 0 ? "bg-orange-500" : "bg-slate-400"
+                  )} />
                 </div>
               </div>
               <div className="flex-1 min-w-0">
@@ -190,12 +191,22 @@ export const OverviewView = () => {
                 <p className="text-slate-500 text-xs truncate">{candidate.role}</p>
               </div>
               <div className="text-right">
-                <p className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">{candidate.score}%</p>
+                <p className={cn("text-xs font-bold px-2 py-1 rounded",
+                  candidate.score >= 80 ? "text-emerald-600 bg-emerald-50" :
+                  candidate.score >= 60 ? "text-amber-600 bg-amber-50" :
+                  candidate.score > 0 ? "text-orange-600 bg-orange-50" :
+                  "text-slate-500 bg-slate-50"
+                )}>{candidate.score > 0 ? `${candidate.score}%` : 'N/A'}</p>
               </div>
             </div>
-          ))}
+          )) : (
+            <p className="text-sm text-slate-500 text-center py-4">No candidates yet</p>
+          )}
         </div>
-        <button className="w-full mt-8 py-3 text-sm font-bold text-slate-600 hover:text-indigo-600 hover:bg-slate-50 rounded-xl border border-slate-100 transition-all">
+        <button 
+          onClick={() => navigate('/dashboard/candidates')}
+          className="w-full mt-8 py-3 text-sm font-bold text-slate-600 hover:text-indigo-600 hover:bg-slate-50 rounded-xl border border-slate-100 transition-all"
+        >
           View All Candidates
         </button>
       </Card>

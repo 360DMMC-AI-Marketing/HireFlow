@@ -139,10 +139,10 @@ const JobsList = () => {
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
                 <option value="all">All Status</option>
-                <option value="active">Active</option>
-                <option value="draft">Draft</option>
-                <option value="paused">Paused</option>
-                <option value="closed">Closed</option>
+                <option value="Active">Active</option>
+                <option value="Draft">Draft</option>
+                <option value="Paused">Paused</option>
+                <option value="Closed">Closed</option>
               </select>
             </div>
 

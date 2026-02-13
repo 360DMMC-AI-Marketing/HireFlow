@@ -42,6 +42,16 @@ const worker = new Worker('resume-processing', async (job) => {
     const rawText = await extractText(fileBuffer, mimeType);
     console.log(`✅ Extracted ${rawText.length} characters`);
 
+    if (!rawText || rawText.length < 20) {
+      console.warn('⚠️  Extracted text too short, skipping AI analysis');
+      await Candidate.findByIdAndUpdate(candidateId, { 
+        processingStatus: 'Failed',
+        resumeText: rawText || '',
+        redFlags: ['Could not extract readable text from resume file. Please re-upload in a different format (PDF or DOCX).']
+      });
+      return { success: false, candidateId, reason: 'Text extraction yielded insufficient text' };
+    }
+
     // 3. Fetch Job Description from Database
     let jobDescription = "General position";
     let jobTitle = "General Application";
@@ -51,7 +61,9 @@ const worker = new Worker('resume-processing', async (job) => {
         const { default: Job } = await import('../models/job.js');
         const job = await Job.findById(jobId);
         if (job) {
-          jobDescription = `${job.title}\n\n${job.description}\n\nRequirements:\n${job.requirements || 'Not specified'}`;
+          const reqs = Array.isArray(job.requirements) ? job.requirements.join('\n- ') : (job.requirements || 'Not specified');
+          const skills = job.screeningCriteria?.requiredSkills?.join(', ') || '';
+          jobDescription = `${job.title}\n\n${job.description}\n\nRequirements:\n- ${reqs}${skills ? `\n\nRequired Skills: ${skills}` : ''}${job.screeningCriteria?.minYearsExperience ? `\nMinimum Experience: ${job.screeningCriteria.minYearsExperience} years` : ''}`;
           jobTitle = job.title;
           console.log(`📌 Job found: ${job.title}`);
         }

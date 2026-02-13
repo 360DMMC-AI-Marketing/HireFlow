@@ -386,18 +386,18 @@ const JobDetailPage = () => {
               </CardContent>
             </Card>
 
-            {/* Recent Candidates */}
+            {/* Top Candidates by Match Score */}
             {candidates.length > 0 && (
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
-                    <CardTitle>Recent Applicants</CardTitle>
+                    <CardTitle>Top Candidates</CardTitle>
                     <Badge variant="secondary">{candidates.length}</Badge>
                   </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {candidates.slice(0, 5).map((candidate) => (
+                    {[...candidates].sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0)).slice(0, 5).map((candidate) => (
                       <div
                         key={candidate._id}
                         onClick={() => navigate(`/dashboard/candidates/${candidate._id}`)}

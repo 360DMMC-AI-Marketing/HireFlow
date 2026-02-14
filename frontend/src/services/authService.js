@@ -8,15 +8,20 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const getToken = () => localStorage.getItem('token');
 const getUser = () => JSON.parse(localStorage.getItem('user'));
+const getRefreshToken = () => localStorage.getItem('refreshToken');
 
-const setAuthSession = (token, user) => {
+const setAuthSession = (token, user, refreshToken) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
+    if (refreshToken) {
+        localStorage.setItem('refreshToken', refreshToken);
+    }
 };
 
 const clearAuthSession = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('refreshToken');
 };
 
 // Centralized request handler
@@ -82,8 +87,8 @@ export const login = async (email, password) => {
     });
 
     if (data.token) {
-        // Save BOTH token and user data
-        setAuthSession(data.token, data.user);
+        // Save token, user data, and refresh token
+        setAuthSession(data.token, data.user, data.refreshToken);
     }
 
     return data;
@@ -139,4 +144,4 @@ export const getCurrentUser = () => {
 };
 
 // Export helpers if needed directly
-export { getToken, getUser };
+export { getToken, getUser, getRefreshToken };

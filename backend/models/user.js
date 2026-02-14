@@ -9,6 +9,11 @@ const UserSchema = new mongoose.Schema({
         enum: ['admin', 'recruiter', 'hiring_manager'],
         default: 'recruiter'
     },
+    companyId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Company',
+        default: null
+    },
     
     email: {
         type: String,
@@ -79,6 +84,10 @@ const UserSchema = new mongoose.Schema({
     resetPasswordExpires: Date,
     resetPasswordCode: String,
     resetPasswordCodeExpires: Date,
+    refreshToken: {
+        type: String,
+        default: null
+    },
     createdAt: {
         type: Date,
         default: Date.now
@@ -101,8 +110,19 @@ UserSchema.methods.comparePassword = async function(plainPassword) {
 // Generate JWT token
 UserSchema.methods.getSignedJwtToken = function() {
     return jwt.sign({ id: this._id }, process.env.JWT_SECRET, {
-        expiresIn: process.env.JWT_EXPIRES_IN
+        expiresIn: process.env.JWT_EXPIRES_IN || '15m'
     });
+};
+
+// Generate refresh token (longer lived)
+UserSchema.methods.generateRefreshToken = function() {
+    const refreshToken = jwt.sign(
+        { id: this._id },
+        process.env.JWT_REFRESH_SECRET || (process.env.JWT_SECRET + '_refresh'),
+        { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' }
+    );
+    this.refreshToken = refreshToken;
+    return refreshToken;
 };
 
 // Generate email verification token

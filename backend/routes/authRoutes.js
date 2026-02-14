@@ -7,7 +7,8 @@ import {
     verifyResetCode,
     resetPassword, 
     getMe, 
-    logout 
+    logout,
+    refreshAccessToken 
 } from "../controllers/authController.js";
 import { protect } from "../middleware/auth.js";
 
@@ -20,6 +21,7 @@ router.post("/login", login);
 router.post("/forgot-password", forgotPassword);
 router.post("/verify-reset-code", verifyResetCode);
 router.post("/reset-password/:token", resetPassword);
+router.post("/refresh-token", refreshAccessToken);
 
 // Protected routes
 router.get("/me", protect, getMe);

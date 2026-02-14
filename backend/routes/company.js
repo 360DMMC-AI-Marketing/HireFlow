@@ -1,13 +1,21 @@
 import { Router } from "express";
-const router = Router();
-router.get('/api/company/profile', (req, res) => {
-    res.send('Company profile endpoint');
-}   );
+import { protect } from "../middleware/auth.js";
+import { getCompany, createCompany, updateCompany, addMember, removeMember } from "../controllers/companyController.js";
 
-router.put('/api/company/profile', (req, res) =>{  
-    res.send('Update company profile endpoint');
-}   );  
-router.post('/api/company/logo', (req, res) => {
-    res.send('Upload company logo endpoint');
-}   );
+const router = Router();
+
+// All routes are protected
+router.use(protect);
+
+router.route('/')
+    .get(getCompany)
+    .post(createCompany)
+    .put(updateCompany);
+
+router.route('/members')
+    .post(addMember);
+
+router.route('/members/:userId')
+    .delete(removeMember);
+
 export default router;

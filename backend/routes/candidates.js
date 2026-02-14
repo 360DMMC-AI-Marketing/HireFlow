@@ -300,6 +300,56 @@ router.get('/:id', authorize('admin', 'recruiter', 'hiring_manager'), async (req
     }
 });
 
+// GET resume file for a candidate (download or inline view)
+router.get('/:id/resume', authorize('admin', 'recruiter', 'hiring_manager'), async (req, res) => {
+    try {
+        const { default: Candidate } = await import('../models/candidate.js');
+        const { promises: fs } = await import('fs');
+        
+        const candidate = await Candidate.findById(req.params.id);
+        
+        if (!candidate) {
+            return res.status(404).json({ success: false, message: 'Candidate not found' });
+        }
+        
+        if (!candidate.resumePath) {
+            return res.status(404).json({ success: false, message: 'No resume on file for this candidate' });
+        }
+        
+        const backendDir = path.resolve(__dirname, '..');
+        const absolutePath = path.resolve(backendDir, candidate.resumePath);
+        
+        // Verify file exists
+        try {
+            await fs.access(absolutePath);
+        } catch {
+            return res.status(404).json({ success: false, message: 'Resume file not found on disk' });
+        }
+        
+        const ext = path.extname(candidate.resumeFileName || candidate.resumePath).toLowerCase();
+        const mimeTypes = {
+            '.pdf': 'application/pdf',
+            '.doc': 'application/msword',
+            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        };
+        const contentType = mimeTypes[ext] || 'application/octet-stream';
+        
+        // If ?download=true, force download; otherwise inline display
+        const disposition = req.query.download === 'true' 
+            ? `attachment; filename="${candidate.resumeFileName || 'resume' + ext}"` 
+            : `inline; filename="${candidate.resumeFileName || 'resume' + ext}"`;
+        
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Disposition', disposition);
+        
+        const { createReadStream } = await import('fs');
+        createReadStream(absolutePath).pipe(res);
+    } catch (error) {
+        console.error('Error serving resume:', error);
+        res.status(500).json({ success: false, message: 'Error serving resume', error: error.message });
+    }
+});
+
 // ACTIONS: Only 'admin' and 'recruiter' can change status or take interview notes
 router.post('/', authorize('admin', 'recruiter'), async (req, res) => {
     try {

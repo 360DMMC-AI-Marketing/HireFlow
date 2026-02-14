@@ -1,10 +1,27 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
+import api from "@/utils/axios";
 
 export const DashboardLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Fetch fresh user profile on layout mount so TopBar is always up to date
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const { data } = await api.get('/user/profile');
+        if (data?.success && data?.user) {
+          localStorage.setItem('user', JSON.stringify(data.user));
+          window.dispatchEvent(new CustomEvent('userUpdated', { detail: data.user }));
+        }
+      } catch (err) {
+        // Ignore — if token invalid the 401 interceptor handles redirect
+      }
+    };
+    fetchUser();
+  }, []);
 
   return (
     <div className="flex min-h-screen bg-[#F8FAFC] font-sans antialiased text-slate-900">

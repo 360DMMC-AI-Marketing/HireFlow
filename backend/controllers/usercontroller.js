@@ -14,6 +14,7 @@ export const getUserProfile = async (req, res) => {
             user: {
                 id: user._id,
                 email: user.email,
+                role: user.role,
                 firstName: user.firstName,
                 lastName: user.lastName,
                 phone: user.phone,
@@ -71,6 +72,7 @@ export const updateUserProfile = async (req, res) => {
         const updatedUser = {
             id: user._id,
             email: user.email,
+            role: user.role,
             firstName: user.firstName,
             lastName: user.lastName,
             phone: user.phone,

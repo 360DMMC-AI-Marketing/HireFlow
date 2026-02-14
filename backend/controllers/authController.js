@@ -1,5 +1,6 @@
 import User from "../models/user.js";
 import crypto from "crypto";
+import jwt from "jsonwebtoken";
 import sendEmail from "../utils/sendEmail.js";
 
 // SIGNUP
@@ -117,14 +118,28 @@ export const login = async (req, res) => {
     }
 
     const token = user.getSignedJwtToken();
+    const refreshToken = user.generateRefreshToken();
+    await user.save({ validateBeforeSave: false });
 
     res.status(200).json({
       success: true,
       token,
+      refreshToken,
       user: {
         id: user._id,
         email: user.email,
-        companyName: user.companyName
+        role: user.role,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phone: user.phone,
+        jobTitle: user.jobTitle,
+        department: user.department,
+        bio: user.bio,
+        avatar: user.avatar,
+        companyName: user.companyName,
+        companyWebsite: user.companyWebsite,
+        companySize: user.companySize,
+        industry: user.industry
       }
     });
   } catch (err) {
@@ -278,9 +293,18 @@ export const getMe = async (req, res) => {
       user: {
         id: user._id,
         email: user.email,
+        role: user.role,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phone: user.phone,
+        jobTitle: user.jobTitle,
+        department: user.department,
+        bio: user.bio,
+        avatar: user.avatar,
         companyName: user.companyName,
-        industry: user.industry,
+        companyWebsite: user.companyWebsite,
         companySize: user.companySize,
+        industry: user.industry,
         isEmailVerified: user.isEmailVerified,
         createdAt: user.createdAt
       }
@@ -293,8 +317,60 @@ export const getMe = async (req, res) => {
 
 // LOGOUT
 export const logout = async (req, res) => {
+  try {
+    // Clear refresh token in database
+    if (req.user) {
+      await User.findByIdAndUpdate(req.user.id, { refreshToken: null });
+    }
+  } catch (err) {
+    // Ignore errors during logout cleanup
+  }
   res.status(200).json({ 
     success: true,
     message: "Logout successful" 
   });
+};
+
+// REFRESH TOKEN - Issue new access token using refresh token
+export const refreshAccessToken = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({ error: "Refresh token is required" });
+    }
+
+    // Verify the refresh token
+    let decoded;
+    try {
+      decoded = jwt.verify(
+        refreshToken,
+        process.env.JWT_REFRESH_SECRET || (process.env.JWT_SECRET + '_refresh')
+      );
+    } catch (err) {
+      return res.status(401).json({ error: "Invalid or expired refresh token" });
+    }
+
+    // Find user and verify stored refresh token matches
+    const user = await User.findById(decoded.id);
+    if (!user || user.refreshToken !== refreshToken) {
+      return res.status(401).json({ error: "Invalid refresh token" });
+    }
+
+    // Issue new access token
+    const newAccessToken = user.getSignedJwtToken();
+
+    // Optionally rotate refresh token
+    const newRefreshToken = user.generateRefreshToken();
+    await user.save({ validateBeforeSave: false });
+
+    res.status(200).json({
+      success: true,
+      token: newAccessToken,
+      refreshToken: newRefreshToken
+    });
+  } catch (err) {
+    console.error('Refresh token error:', err);
+    res.status(500).json({ error: "Server error" });
+  }
 };

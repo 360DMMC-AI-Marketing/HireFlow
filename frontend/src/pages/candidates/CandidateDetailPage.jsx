@@ -4,7 +4,7 @@ import api from '@/utils/axios';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { 
+import {
   ArrowLeft, 
   Mail, 
   Phone, 
@@ -20,6 +20,7 @@ import {
   ThumbsDown,
   Clock
 } from 'lucide-react';
+import ResumeViewer from '@/components/candidates/ResumeViewer';
 
 const CandidateDetailPage = () => {
   const { id } = useParams();
@@ -121,10 +122,20 @@ const CandidateDetailPage = () => {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm">
-                      <Download className="w-4 h-4 mr-2" />
-                      Resume
-                    </Button>
+                    {candidate.resumePath && (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          const token = localStorage.getItem('token');
+                          const url = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/candidates/${candidate._id}/resume?download=true&token=${encodeURIComponent(token || '')}`;
+                          window.open(url, '_blank');
+                        }}
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Resume
+                      </Button>
+                    )}
                   </div>
                 </div>
 
@@ -169,6 +180,13 @@ const CandidateDetailPage = () => {
                 </CardContent>
               </Card>
             )}
+
+            {/* Resume Viewer */}
+            <ResumeViewer 
+              candidateId={candidate._id}
+              resumeFileName={candidate.resumeFileName}
+              resumePath={candidate.resumePath}
+            />
 
             {/* Experience */}
             {candidate.experience && candidate.experience.length > 0 && (

@@ -58,7 +58,11 @@ app.use(cors(corsOptions));
 // ============================================================
 
 // 1. Helmet: Set security HTTP headers (hides "Express" info, blocks malicious scripts)
-app.use(helmet());
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    contentSecurityPolicy: false, // Disable CSP in dev to allow iframe resume viewer
+    frameguard: false // Allow iframe embedding for resume viewer
+}));
 
 // 2. Rate Limiting: Limit requests from the same IP
 // More lenient in development, stricter in production

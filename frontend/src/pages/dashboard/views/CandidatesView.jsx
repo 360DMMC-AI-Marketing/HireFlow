@@ -473,7 +473,7 @@ export const CandidatesView = () => {
         // Group filtered candidates by their status
         const grouped = {};
         pipelineStages.forEach(s => { grouped[s.id] = []; });
-        filteredCandidates.forEach(c => {
+        filteredAndSortedCandidates.forEach(c => {
           const status = c.status || 'New';
           if (grouped[status]) grouped[status].push(c);
           else grouped['New'].push(c);

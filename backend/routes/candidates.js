@@ -341,6 +341,10 @@ router.get('/:id/resume', authorize('admin', 'recruiter', 'hiring_manager'), asy
         
         res.setHeader('Content-Type', contentType);
         res.setHeader('Content-Disposition', disposition);
+        // Allow iframe embedding and cross-origin access for the resume viewer
+        res.setHeader('X-Frame-Options', 'ALLOWALL');
+        res.removeHeader('Content-Security-Policy');
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
         
         const { createReadStream } = await import('fs');
         createReadStream(absolutePath).pipe(res);

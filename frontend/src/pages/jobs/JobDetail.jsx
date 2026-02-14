@@ -53,8 +53,14 @@ const JobDetailPage = () => {
 
   useEffect(() => {
     fetchJobDetails();
-    fetchCandidates();
   }, [id]);
+
+  // Re-fetch candidates when job data is available (need title for matching)
+  useEffect(() => {
+    if (job) {
+      fetchCandidates();
+    }
+  }, [id, job?.title]);
 
   const fetchJobDetails = async () => {
     try {
@@ -70,8 +76,15 @@ const JobDetailPage = () => {
   const fetchCandidates = async () => {
     try {
       const response = await api.get('/candidates');
-      // Filter candidates for this specific job
-      const jobCandidates = response.data.filter(c => c.jobId === id);
+      // Filter candidates for this specific job by jobId OR by matching position name
+      const jobTitle = job?.title;
+      const jobCandidates = response.data.filter(c => {
+        if (c.jobId === id) return true;
+        // Also match candidates whose positionApplied matches the job title
+        if (jobTitle && c.positionApplied && 
+            c.positionApplied.toLowerCase() === jobTitle.toLowerCase()) return true;
+        return false;
+      });
       setCandidates(jobCandidates);
     } catch (error) {
       console.error('Error fetching candidates:', error);

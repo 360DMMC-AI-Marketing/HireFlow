@@ -1,7 +1,10 @@
 import 'dotenv/config';
 import mongoose from 'mongoose';
 import { connectToDatabase } from './config/database.js';
+// At the top
+import './workers/emailWorker.js'; 
 import app from './app.js';
+
 
 
 const PORT = process.env.PORT || 3000;

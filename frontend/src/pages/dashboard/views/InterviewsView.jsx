@@ -1,24 +1,37 @@
 import React from "react";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { Mail, ChevronRight, CheckCircle2, CalendarDays, ArrowRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Mail, ChevronRight, CheckCircle2, CalendarDays, ArrowRight, Settings } from "lucide-react";
 import { Card } from "../shared/Card";
 
 function cn(...inputs) {
   return twMerge(clsx(inputs));
 }
 
-export const InterviewsView = () => (
+export const InterviewsView = () => {
+  const navigate = useNavigate();
+
+  return (
   <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
     <div className="flex items-center justify-between mb-8">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Interview System</h1>
         <p className="text-slate-500 text-sm font-medium mt-1">Calendar sync & automated email sequences</p>
       </div>
-      <button className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2">
-        <Mail className="w-4 h-4" />
-        Email Templates
-      </button>
+      <div className="flex items-center gap-2">
+        <button 
+          onClick={() => navigate('/dashboard/interviews/settings')}
+          className="bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all flex items-center gap-2"
+        >
+          <Settings className="w-4 h-4" />
+          Settings
+        </button>
+        <button className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2">
+          <Mail className="w-4 h-4" />
+          Email Templates
+        </button>
+      </div>
     </div>
 
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -84,11 +97,15 @@ export const InterviewsView = () => (
           <CalendarDays className="absolute -right-4 -bottom-4 w-32 h-32 text-white/5" />
           <h3 className="font-bold mb-2">Calendar Sync</h3>
           <p className="text-xs text-slate-400 mb-4 leading-relaxed">Connect your Google or Outlook calendar to automate scheduling links.</p>
-          <button className="w-full py-2.5 bg-white text-slate-900 rounded-xl text-xs font-black flex items-center justify-center gap-2">
+          <button 
+            onClick={() => navigate('/dashboard/interviews/settings')}
+            className="w-full py-2.5 bg-white text-slate-900 rounded-xl text-xs font-black flex items-center justify-center gap-2 hover:bg-slate-100 transition-all"
+          >
             Connect Calendar <ArrowRight className="w-3 h-3" />
           </button>
         </Card>
       </div>
     </div>
   </div>
-);
+  );
+};

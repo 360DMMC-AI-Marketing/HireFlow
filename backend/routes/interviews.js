@@ -1,61 +1,31 @@
 // backend/routes/interviews.js
-import { Router } from "express";
+import { Router } from 'express';
 import { protect, authorize } from '../middleware/auth.js';
-
-// IMPORTANT: This imports all exports from the file as an object named 'interviewController'
-import * as interviewController from '../controllers/interviewController.js'; 
+import * as ctrl from '../controllers/interviewController.js';
 
 const router = Router();
 
-// ... existing code ...
+// ─── PUBLIC: Magic Link Scheduling ───────────────────────────────────────────
+router.get('/schedule/:token', ctrl.validateScheduleToken);
+router.post('/schedule/:token/book', ctrl.bookViaToken);
 
-// CHECK THIS SECTION:
-// Ensure interviewController.getSlots is actually being called
-router.get('/slots', interviewController.getSlots); 
-router.post('/book', interviewController.bookSlot);
-router.post('/slots', protect, authorize('admin', 'recruiter'), interviewController.createSlots);
-// ==========================================
-//  PART 2: LIVE INTERVIEW ROUTES (Existing)
-// ==========================================
+// ─── PUBLIC: Available slots (candidates viewing via scheduling page) ────────
+router.get('/slots', ctrl.getSlots);
+router.post('/book', ctrl.bookSlot);
 
-router.get('/:token/verify', (req, res) => {
-    res.send('Interview Verify API is working');
-});
+// ─── PROTECTED: Require auth ─────────────────────────────────────────────────
+router.use(protect);
 
-router.post('/:token/tech-check-complete', (req, res) => {
-    res.send('Interview Tech Check Complete API is working');
-});
+// Slot management (recruiter/admin)
+router.post('/slots', authorize('admin', 'recruiter'), ctrl.createSlots);
+router.get('/slots/me', authorize('admin', 'recruiter'), ctrl.getMySlots);
+router.delete('/slots/:id', authorize('admin', 'recruiter'), ctrl.deleteSlot);
 
-router.post('/:token/start', (req, res) => {
-    res.send('Interview Start API is working');
-});
-
-router.post('/:token/live', (req, res) => {
-    res.send('Interview Live API is working');
-});
-
-router.post('/:token/answer', (req, res) => {
-    res.send('Interview Answer API is working');
-});
-
-router.post('/:token/upload-chunk', (req, res) => {
-    res.send('Interview Upload Chunk API is working');  
-});  
-
-router.get('/:token/questions', (req, res) => {
-    res.send('Interview Questions API is working');
-});
-
-router.post('/:token/attention-data', (req, res) => {
-    res.send('Interview Attention Data API is working');
-});
-
-router.post('/:token/qa-question', (req, res) => {
-    res.send('Interview QA Question API is working');
-});
-
-router.post('/:token/complete', (req, res) => {
-    res.send('Interview Complete API is working');
-});
+// Interview CRUD
+router.get('/', authorize('admin', 'recruiter', 'hiring_manager'), ctrl.getAllInterviews);
+router.get('/:id', authorize('admin', 'recruiter', 'hiring_manager'), ctrl.getInterviewById);
+router.patch('/:id/cancel', authorize('admin', 'recruiter'), ctrl.cancelInterview);
+router.patch('/:id/reschedule', authorize('admin', 'recruiter'), ctrl.rescheduleInterview);
+router.patch('/:id/feedback', authorize('admin', 'recruiter', 'hiring_manager'), ctrl.addFeedback);
 
 export default router;

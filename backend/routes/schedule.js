@@ -1,17 +1,14 @@
-import {Router} from 'express';
+// backend/routes/schedule.js
+// Public scheduling routes — candidates access these via magic links
+import { Router } from 'express';
+import * as ctrl from '../controllers/interviewController.js';
+
 const router = Router();
 
-router.get('/api/schedule/:token', (req, res) => {
-    res.send('Schedule API is working');
-});
-router.post('/api/schedule/:token/book', (req, res) => {
-    res.send('Schedule POST API is working');
-}   );  
-router.get('/api/schedule/:token/current', (req, res) => {
-    res.send('Schedule availability API is working');
-}   );
-router.patch('/api/schedule/:token/resechedule', (req, res) => {
-    res.send('Schedule unavailable API is working');
-}   );
+// Validate token & get available slots
+router.get('/:token', ctrl.validateScheduleToken);
+
+// Book a slot via magic link
+router.post('/:token/book', ctrl.bookViaToken);
 
 export default router;

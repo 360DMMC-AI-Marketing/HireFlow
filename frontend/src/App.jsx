@@ -19,6 +19,8 @@ import { CandidatesView } from "@/pages/dashboard/views/CandidatesView";
 import AddCandidatePage from "@/pages/candidates/AddCandidatePage";
 import CandidateDetailPage from "@/pages/candidates/CandidateDetailPage";
 import { InterviewsView } from "@/pages/dashboard/views/InterviewsView";
+import InterviewSettingsPage from "@/pages/dashboard/interviews/InterviewSettingsPage"; // <--- NEW IMPORT
+import ScheduleInterview from "@/pages/public/ScheduleInterview";
 import { AIVideoView } from "@/pages/dashboard/views/AIVideoView";
 import { AnalyticsView } from "@/pages/dashboard/analytics/AnalyticsView.jsx";
 import { ANALYTICS_DATA } from "@/utils/data/dashboardData";
@@ -30,6 +32,9 @@ export default function HireFlowDashboard() {
       <Routes>
         {/* Public Job Application Route */}
         <Route path="/apply/:jobId" element={<JobApplicationPage />} />
+        
+        {/* Public Interview Scheduling (magic link) */}
+        <Route path="/schedule/:token" element={<ScheduleInterview />} />
         
         {/* Auth Routes */}
         <Route path="/login" element={
@@ -69,14 +74,20 @@ export default function HireFlowDashboard() {
           </ProtectedRoute>
         }>
           <Route index element={<OverviewView />} />
+          
           <Route path="jobs" element={<JobsView />} />
           <Route path="jobs/create" element={<CreateJob />} />
           <Route path="jobs/:id" element={<JobDetail />} />
           <Route path="jobs/:id/edit" element={<CreateJob />} />
+          
           <Route path="candidates" element={<CandidatesView />} />
           <Route path="candidates/add" element={<AddCandidatePage />} />
           <Route path="candidates/:id" element={<CandidateDetailPage />} />
+          
+          {/* Interview Routes */}
           <Route path="interviews" element={<InterviewsView />} />
+          <Route path="interviews/settings" element={<InterviewSettingsPage />} /> {/* <--- NEW ROUTE */}
+          
           <Route path="ai-video" element={<AIVideoView />} />
           <Route path="analytics" element={<AnalyticsView analyticsData={ANALYTICS_DATA} />} />
           <Route path="profile" element={<UserProfile />} />

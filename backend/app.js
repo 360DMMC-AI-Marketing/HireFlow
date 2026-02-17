@@ -18,6 +18,7 @@ import billingRouter from './routes/billing.js';
 import teamRouter from './routes/team.js';
 import emailsRouter from './routes/emails.js';
 import emailTemplatesRouter from './routes/email-templates.js';
+import scheduleRouter from './routes/schedule.js';
 import errorHandler from './middleware/errorHandler.js';
 const app = express();
 
@@ -112,6 +113,7 @@ app.use('/api/billing', billingRouter);
 app.use('/api/team', teamRouter);
 app.use('/api/emails', emailsRouter);
 app.use('/api/email-templates', emailTemplatesRouter);
+app.use('/api/schedule', scheduleRouter);
 
 // Health check
 app.get('/health', (req, res) => {

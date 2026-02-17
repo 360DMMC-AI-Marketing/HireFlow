@@ -2,20 +2,22 @@
 import { emailQueue } from '../queues/emailQueue.js';
 import EmailLog from '../models/EmailLog.js';
 import EmailTemplate from '../models/EmailTemplate.js';
+import { generateIcs } from '../utils/calendarUtils.js'; // Ensure this file exists
 
 /**
  * 1. Send Immediately
  * Wraps the scheduling function with a delay of 0
  */
 export const sendTemplatedEmail = async (templateName, recipientEmail, variables, options = {}) => {
-  return scheduleEmail(templateName, recipientEmail, variables, new Date());
+  return scheduleEmail(templateName, recipientEmail, variables, new Date(), options);
 };
 
 /**
  * 2. Schedule Email
  * Adds a job to the queue with a 'delay' so it sends later.
+ * NOW UPDATED: Accepts 'options' (for attachments, cc, bcc, etc.)
  */
-export const scheduleEmail = async (templateName, recipientEmail, variables, sendAt) => {
+export const scheduleEmail = async (templateName, recipientEmail, variables, sendAt, options = {}) => {
   try {
     // Calculate delay in milliseconds
     const now = new Date();
@@ -32,11 +34,13 @@ export const scheduleEmail = async (templateName, recipientEmail, variables, sen
     });
 
     // Add to BullMQ with delay
+    // We pass 'options' into the job data so the Worker can access attachments
     const job = await emailQueue.add('send-email', {
       logId: logEntry._id,
       templateName,
       recipientEmail,
-      data: variables
+      data: variables,
+      options: options // <--- NEW: Pass attachments/options to the worker
     }, { 
       delay: delay,
       attempts: 3,
@@ -58,7 +62,6 @@ export const scheduleEmail = async (templateName, recipientEmail, variables, sen
 
 /**
  * 3. Get Email Status
- * Checks the database for the current state of an email.
  */
 export const getEmailStatus = async (emailId) => {
   const emailLog = await EmailLog.findById(emailId);
@@ -67,11 +70,14 @@ export const getEmailStatus = async (emailId) => {
   return {
     id: emailLog._id,
     to: emailLog.to,
-    status: emailLog.status, // queued, sent, failed, scheduled
+    status: emailLog.status,
     sentAt: emailLog.sentAt,
     error: emailLog.error
   };
 };
+
+// --- TRIGGERS ---
+
 export const sendApplicationReceivedEmail = async (candidate, job) => {
   return sendTemplatedEmail('application_received', candidate.email, {
     candidate_name: candidate.name,
@@ -80,9 +86,6 @@ export const sendApplicationReceivedEmail = async (candidate, job) => {
   });
 };
 
-/**
- * Trigger 2: Rejection Email
- */
 export const sendRejectionEmail = async (candidate, job, reason) => {
   return sendTemplatedEmail('application_rejected', candidate.email, {
     candidate_name: candidate.name,
@@ -92,30 +95,53 @@ export const sendRejectionEmail = async (candidate, job, reason) => {
 };
 
 /**
- * Trigger 3: Interview Invitation
+ * Trigger 3: Interview Invitation (UPDATED)
+ * Now generates an ICS calendar file and attaches it.
  */
 export const sendInterviewInvitationEmail = async (candidate, job, interview) => {
-  // 1. Send the Invite Immediately
+  // 1. Generate ICS File content
+  // Calculate end time (default to 60 mins if not specified)
+  const duration = interview.duration || 60;
+  const startTime = new Date(interview.scheduledAt || interview.date);
+  const endTime = new Date(startTime.getTime() + duration * 60000);
+  
+  const icsContent = generateIcs({
+    start: startTime,
+    end: endTime,
+    summary: `Interview: ${job.title} at HireFlow`,
+    description: `Interview for ${job.title}. Join link: ${interview.meetingLink || interview.link}`,
+    location: interview.location || 'Remote',
+    url: interview.meetingLink || interview.link
+  });
+
+  // 2. Send the Invite Immediately WITH Attachment
   await sendTemplatedEmail('interview_invitation', candidate.email, {
     candidate_name: candidate.name,
     job_title: job.title,
-    interview_date: new Date(interview.date).toLocaleString(),
-    interview_link: interview.link
+    interview_date: startTime.toLocaleString(),
+    interview_link: interview.meetingLink || interview.link
+  }, {
+    // Attach the ICS file
+    attachments: [
+      {
+        filename: 'invite.ics',
+        content: icsContent,
+        contentType: 'text/calendar'
+      }
+    ]
   });
 
-  // 2. Schedule Reminder (24 Hours Before)
-  const interviewDate = new Date(interview.date);
-  const reminderDate = new Date(interviewDate.getTime() - 24 * 60 * 60 * 1000); // Minus 24h
+  // 3. Schedule Reminder (24 Hours Before) - No attachment needed for reminder
+  const reminderDate = new Date(startTime.getTime() - 24 * 60 * 60 * 1000); // Minus 24h
 
-  // Only schedule if the reminder time is in the future
   if (reminderDate > new Date()) {
     await scheduleEmail('interview_reminder', candidate.email, {
       candidate_name: candidate.name,
-      interview_date: interviewDate.toLocaleString()
+      interview_date: startTime.toLocaleString()
     }, reminderDate);
     console.log(`Interview reminder scheduled for ${reminderDate}`);
   }
 };
 
-// Alias for backward compatibility (so your other code doesn't break)
+// Alias
 export const sendEmail = sendTemplatedEmail;

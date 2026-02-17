@@ -15,6 +15,12 @@ const UserSchema = new mongoose.Schema({
         default: null
     },
     
+    // --- GOOGLE CALENDAR INTEGRATION FIELDS ---
+    googleId: { type: String },
+    googleAccessToken: { type: String },
+    googleRefreshToken: { type: String }, // Crucial for offline access
+    // ------------------------------------------
+
     email: {
         type: String,
         required: [true, "Please provide an email"],

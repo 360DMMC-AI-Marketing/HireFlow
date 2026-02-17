@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet'; // 1️⃣ SECURITY: HTTP Headers
 import mongoSanitize from 'express-mongo-sanitize'; // 2️⃣ SECURITY: Prevent NoSQL Injection
 import { rateLimit } from 'express-rate-limit'; // 3️⃣ SECURITY: Prevent Brute Force
-
+import passport from 'passport';
 import authRoutes from './routes/authRoutes.js';
 import jobsRouter from './routes/jobs.js';
 import integrationsRouter from './routes/integrations.js';
@@ -11,7 +11,7 @@ import userRouter from './routes/user.route.js';
 import companyRouter from './routes/company.js';
 import questionBanksRouter from './routes/question-banks.js';
 import candidatesRouter from './routes/candidates.js';
-import interviewsRouter from './routes/interview.js';
+import interviewsRouter from './routes/interviews.js';
 import analyticsRouter from './routes/analytics.js';
 import settingsRouter from './routes/settings.js';
 import billingRouter from './routes/billing.js';
@@ -19,7 +19,6 @@ import teamRouter from './routes/team.js';
 import emailsRouter from './routes/emails.js';
 import emailTemplatesRouter from './routes/email-templates.js';
 import errorHandler from './middleware/errorHandler.js';
-
 const app = express();
 
 // ============================================================
@@ -126,5 +125,6 @@ app.use((req, res) => {
 
 // Error handler middleware (must be last)
 app.use(errorHandler);
+app.use(passport.initialize())
 
 export default app;

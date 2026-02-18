@@ -21,6 +21,9 @@ router.post('/slots', authorize('admin', 'recruiter'), ctrl.createSlots);
 router.get('/slots/me', authorize('admin', 'recruiter'), ctrl.getMySlots);
 router.delete('/slots/:id', authorize('admin', 'recruiter'), ctrl.deleteSlot);
 
+// Magic link generation
+router.post('/magic-link', authorize('admin', 'recruiter'), ctrl.generateMagicLink);
+
 // Interview CRUD
 router.get('/', authorize('admin', 'recruiter', 'hiring_manager'), ctrl.getAllInterviews);
 router.get('/:id', authorize('admin', 'recruiter', 'hiring_manager'), ctrl.getInterviewById);

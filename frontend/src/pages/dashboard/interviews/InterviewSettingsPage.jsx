@@ -1,7 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Plus, Trash2, CheckCircle, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, Plus, Trash2, CheckCircle, AlertCircle, Globe } from 'lucide-react';
 import { createInterviewSlot, getRecruiterSlots, deleteInterviewSlot, connectGoogleCalendar } from '../../../services/api/InterviewSettingsPage';
 import { format } from 'date-fns';
+
+const TIMEZONES = [
+  'UTC',
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+  'Europe/London',
+  'Europe/Paris',
+  'Europe/Berlin',
+  'Asia/Dubai',
+  'Asia/Kolkata',
+  'Asia/Shanghai',
+  'Asia/Tokyo',
+  'Australia/Sydney',
+  'Pacific/Auckland'
+];
+
+const DURATIONS = [15, 30, 45, 60, 90, 120];
 
 const InterviewSettingsPage = () => {
   const [loading, setLoading] = useState(false);
@@ -11,6 +30,8 @@ const InterviewSettingsPage = () => {
   const [date, setDate] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
+  const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+  const [duration, setDuration] = useState(60);
 
   // Slots from backend
   const [slots, setSlots] = useState([]);
@@ -49,16 +70,24 @@ const InterviewSettingsPage = () => {
     setMessage(null);
 
     try {
-      // Combine date + time into ISO string
-      const startDateTime = new Date(`${date}T${startTime}:00Z`); // Simple UTC assumption for demo
-      const endDateTime = new Date(`${date}T${endTime}:00Z`);
+      // Combine date + time; auto-calculate endTime from duration if not provided
+      const startDateTime = new Date(`${date}T${startTime}:00`);
+      const endDateTime = endTime
+        ? new Date(`${date}T${endTime}:00`)
+        : new Date(startDateTime.getTime() + duration * 60 * 1000);
+
+      if (endDateTime <= startDateTime) {
+        setMessage({ type: 'error', text: 'End time must be after start time' });
+        setLoading(false);
+        return;
+      }
 
       const payload = {
         startTime: startDateTime.toISOString(),
         endTime: endDateTime.toISOString(),
+        timezone,
       };
 
-      // Call API
       const newSlot = await createInterviewSlot(payload);
       
       setSlots([...slots, newSlot]);
@@ -80,7 +109,7 @@ const InterviewSettingsPage = () => {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Interview Settings</h1>
-        <p className="text-gray-500">Manage your calendar integration and availability slots.</p>
+        <p className="text-gray-500">Manage your calendar integration, timezone, and availability slots.</p>
       </div>
 
       {/* SECTION 1: Google Integration */}
@@ -105,7 +134,41 @@ const InterviewSettingsPage = () => {
         </div>
       </div>
 
-      {/* SECTION 2: Availability Manager */}
+      {/* SECTION 2: Timezone & Duration Settings */}
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <Globe className="w-5 h-5 text-blue-600" />
+          Scheduling Preferences
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+            <select
+              value={timezone}
+              onChange={(e) => setTimezone(e.target.value)}
+              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+            >
+              {TIMEZONES.map(tz => (
+                <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Default Duration</label>
+            <select
+              value={duration}
+              onChange={(e) => setDuration(Number(e.target.value))}
+              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+            >
+              {DURATIONS.map(d => (
+                <option key={d} value={d}>{d} minutes</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* SECTION 3: Availability Manager */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Add Availability</h2>
         
@@ -117,7 +180,7 @@ const InterviewSettingsPage = () => {
         )}
 
         {/* Add Slot Form */}
-        <form onSubmit={handleAddSlot} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end mb-8">
+        <form onSubmit={handleAddSlot} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end mb-8">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
             <input 
@@ -139,14 +202,19 @@ const InterviewSettingsPage = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">End Time <span className="text-gray-400 text-xs">(optional)</span></label>
             <input 
               type="time" 
-              required
               className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
+              placeholder="Auto from duration"
             />
+          </div>
+          <div className="text-xs text-gray-400 self-center">
+            {!endTime && startTime && (
+              <span>End auto-set to {duration}min after start</span>
+            )}
           </div>
           <button 
             type="submit" 

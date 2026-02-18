@@ -157,9 +157,25 @@ export const addFeedback = async (req, res) => {
   }
 };
 
+// ─── MAGIC LINK GENERATION (Protected) ───────────────────────────────────────
+
+// 11. Generate a magic link token for a candidate/job pair
+export const generateMagicLink = async (req, res) => {
+  try {
+    const { candidateId, jobId } = req.body;
+    if (!candidateId || !jobId) {
+      return res.status(400).json({ success: false, message: 'candidateId and jobId are required' });
+    }
+    const token = interviewService.generateMagicToken(candidateId, jobId);
+    res.json({ success: true, token, link: `/schedule/${token}` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // ─── PUBLIC: Magic Link Scheduling ───────────────────────────────────────────
 
-// 11. Validate magic link token & return scheduling data
+// 12. Validate magic link token & return scheduling data
 export const validateScheduleToken = async (req, res) => {
   try {
     const data = await interviewService.validateMagicToken(req.params.token);

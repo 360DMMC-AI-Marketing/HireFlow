@@ -43,6 +43,19 @@ const templates = [
     `,
     variables: ['candidate_name', 'job_title', 'interview_date', 'interview_link'],
     isActive: true
+  },
+  {
+    name: 'interview_reminder',
+    subject: 'Reminder: Your interview is tomorrow',
+    bodyHtml: `
+      <h1>Hi {{candidate_name}},</h1>
+      <p>This is a friendly reminder that your interview is coming up tomorrow.</p>
+      <p><strong>Date:</strong> {{interview_date}}</p>
+      <p>Please make sure you're prepared and join on time.</p>
+      <p>Good luck!<br>The HireFlow Team</p>
+    `,
+    variables: ['candidate_name', 'interview_date'],
+    isActive: true
   }
 ];
 

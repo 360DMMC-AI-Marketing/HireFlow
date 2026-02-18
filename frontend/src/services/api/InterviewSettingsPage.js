@@ -74,6 +74,14 @@ export const connectGoogleCalendar = () => {
   window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/google`;
 };
 
+// ─── MAGIC LINK GENERATION ───────────────────────────────────────────────────
+
+// Generate a magic link for a candidate (recruiter action)
+export const generateMagicLink = async (candidateId, jobId) => {
+  const response = await api.post('/interviews/magic-link', { candidateId, jobId });
+  return response.data;
+};
+
 // ─── PUBLIC SCHEDULING (Magic Links) ─────────────────────────────────────────
 
 // Validate a scheduling token (no auth needed)

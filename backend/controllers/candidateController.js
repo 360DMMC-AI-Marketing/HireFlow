@@ -1,4 +1,3 @@
-// backend/controllers/candidateController.js
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -259,7 +258,7 @@ export const getAllCandidates = async (req, res) => {
  */
 export const getCandidateById = async (req, res) => {
   try {
-    const candidate = await Candidate.findById(req.params.id);
+    const candidate = await Candidate.findById(req.params.id).populate('jobId'); // Populated to help with job info
     if (!candidate) {
       return res.status(404).json({ success: false, message: 'Candidate not found' });
     }
@@ -367,16 +366,25 @@ export const updateCandidateStatus = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Candidate not found' });
     }
 
-    // ── Email trigger: Rejection ──
+    // ── AUTOMATION: Trigger Emails based on Status ──
     if (status === 'Rejected') {
       try {
         const job = candidate.jobId ? await Job.findById(candidate.jobId) : null;
         const jobInfo = job || { title: candidate.positionApplied || 'Position' };
+        
+        console.log(`📉 Sending rejection email to ${candidate.email}`);
+        
+        // Non-blocking email send
         sendRejectionEmail(candidate, jobInfo, rejectionReason)
           .catch(err => console.error('📧 Rejection email failed (non-blocking):', err.message));
       } catch (emailErr) {
         console.error('📧 Could not prepare rejection email:', emailErr.message);
       }
+    }
+    
+    // Optional: Log other status changes
+    if (status === 'Hired') {
+        console.log(`🎉 Candidate ${candidate.email} was HIRED!`);
     }
 
     res.json({ success: true, candidate });
@@ -408,6 +416,7 @@ export const bulkUpdateCandidates = async (req, res) => {
         for (const candidate of rejectedCandidates) {
           const job = candidate.jobId ? await Job.findById(candidate.jobId) : null;
           const jobInfo = job || { title: candidate.positionApplied || 'Position' };
+          
           sendRejectionEmail(candidate, jobInfo, updates.rejectionReason)
             .catch(err => console.error(`📧 Bulk rejection email failed for ${candidate.email}:`, err.message));
         }

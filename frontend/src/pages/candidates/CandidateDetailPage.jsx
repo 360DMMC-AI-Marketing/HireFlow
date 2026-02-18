@@ -1,24 +1,26 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '@/utils/axios';
+import { generateMagicLink } from '@/services/api/InterviewSettingsPage';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { toast } from 'sonner';
 import {
   ArrowLeft, 
   Mail, 
   Phone, 
   MapPin, 
   Linkedin, 
-  Github,
   Download,
   Calendar,
   Briefcase,
   GraduationCap,
-  Star,
   ThumbsUp,
   ThumbsDown,
-  Clock
+  Clock,
+  Check,
+  UserCheck
 } from 'lucide-react';
 import ResumeViewer from '@/components/candidates/ResumeViewer';
 
@@ -27,6 +29,7 @@ const CandidateDetailPage = () => {
   const navigate = useNavigate();
   const [candidate, setCandidate] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false); // To block buttons while updating
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -43,6 +46,92 @@ const CandidateDetailPage = () => {
       setLoading(false);
     }
   };
+
+  // --- SMART ACTION HANDLERS ---
+
+  // 1. Schedule Interview -> Generates magic link, updates status, navigates to interview system
+  const handleSchedule = async () => {
+    const jobId = candidate?.jobId?._id || candidate?.jobId;
+    if (!jobId) {
+      toast.error("Error: This candidate is not linked to a Job ID.");
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      // A. Generate magic link via backend
+      const { token, link } = await generateMagicLink(candidate._id, jobId);
+      const magicLink = `${window.location.origin}${link}`;
+
+      // B. Update candidate status to 'Interview' if not already further in pipeline
+      if (['New', 'Screening', 'Applied'].includes(candidate.status)) {
+        setCandidate(prev => ({ ...prev, status: 'Interview' }));
+        await api.patch(`/candidates/${id}/status`, { status: 'Interview' });
+      }
+
+      // C. Copy magic link to clipboard
+      try {
+        await navigator.clipboard.writeText(magicLink);
+      } catch (_) { /* clipboard may fail in non-https */ }
+
+      // D. Show success toast with the magic link
+      toast.success("Magic Link Generated!", {
+        description: "Link copied to clipboard. Share it with the candidate so they can pick a time slot.",
+        duration: 6000
+      });
+
+      // E. Navigate to the interview settings page so recruiter can manage slots
+      navigate('/dashboard/interviews/settings');
+    } catch (error) {
+      const msg = error.response?.data?.message || 'Failed to generate scheduling link';
+      toast.error(msg);
+      fetchCandidate(); // Revert optimistic update
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // 2. Reject Candidate -> Sets Status to 'Rejected' (Backend sends email)
+  const handleReject = async () => {
+    if (!confirm("Are you sure? This will reject the candidate and automatically send a rejection email.")) return;
+
+    setActionLoading(true);
+    try {
+      setCandidate(prev => ({ ...prev, status: 'Rejected' })); // Optimistic
+      await api.patch(`/candidates/${id}/status`, { status: 'Rejected' });
+      toast.success("Candidate Rejected", { description: "Rejection email sent." });
+    } catch (error) {
+      toast.error("Failed to reject candidate");
+      fetchCandidate(); // Revert
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // 3. Hire Candidate -> Sets Status to 'Hired'
+  const handleHire = async () => {
+    if (!confirm("Confirm hiring this candidate?")) return;
+
+    setActionLoading(true);
+    try {
+      setCandidate(prev => ({ ...prev, status: 'Hired' })); // Optimistic
+      await api.patch(`/candidates/${id}/status`, { status: 'Hired' });
+      toast.success("Candidate Hired!", { description: "Congratulations!" });
+    } catch (error) {
+      toast.error("Failed to hire candidate");
+      fetchCandidate(); // Revert
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // 4. Send Generic Email (No status change)
+  const handleSendEmail = async () => {
+    // You can hook this up to a modal or a specific backend endpoint later
+    toast.info("Email feature coming soon");
+  };
+
+  // --- HELPERS ---
 
   const getStatusBadge = (status) => {
     const variants = {
@@ -236,28 +325,75 @@ const CandidateDetailPage = () => {
 
           {/* Right Column - Actions & Timeline */}
           <div className="space-y-6">
-            {/* Actions Card */}
+            
+            {/* --- NEW SMART ACTIONS CARD --- */}
             <Card>
               <CardHeader>
                 <CardTitle>Quick Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button className="w-full bg-indigo-600 hover:bg-indigo-700">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  Schedule Interview
-                </Button>
-                <Button variant="outline" className="w-full">
+                
+                {/* 1. Schedule (Hidden if Hired/Rejected) */}
+                {['New', 'Screening', 'Interview', 'Applied'].includes(candidate.status) && (
+                  <Button 
+                    onClick={handleSchedule}
+                    disabled={actionLoading}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 transition-all shadow-sm"
+                  >
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Schedule Interview
+                  </Button>
+                )}
+
+                {/* 2. Send Email */}
+                <Button 
+                  onClick={handleSendEmail} 
+                  disabled={actionLoading}
+                  variant="outline" 
+                  className="w-full"
+                >
                   <Mail className="w-4 h-4 mr-2" />
                   Send Email
                 </Button>
-                <Button variant="outline" className="w-full text-green-600 hover:bg-green-50">
-                  <ThumbsUp className="w-4 h-4 mr-2" />
-                  Move to Next Stage
-                </Button>
-                <Button variant="outline" className="w-full text-red-600 hover:bg-red-50">
-                  <ThumbsDown className="w-4 h-4 mr-2" />
-                  Reject Candidate
-                </Button>
+
+                {/* 3. Hire (Hidden if Hired/Rejected) */}
+                {candidate.status !== 'Hired' && candidate.status !== 'Rejected' && (
+                  <Button 
+                    onClick={handleHire}
+                    disabled={actionLoading}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                  >
+                    <UserCheck className="w-4 h-4 mr-2" />
+                    Hire Candidate
+                  </Button>
+                )}
+
+                {/* 4. Reject (Hidden if Hired/Rejected) */}
+                {candidate.status !== 'Rejected' && candidate.status !== 'Hired' && (
+                  <Button 
+                    onClick={handleReject}
+                    disabled={actionLoading}
+                    variant="ghost"
+                    className="w-full text-red-600 hover:bg-red-50 hover:text-red-700 border border-transparent hover:border-red-200"
+                  >
+                    <ThumbsDown className="w-4 h-4 mr-2" />
+                    Reject Candidate
+                  </Button>
+                )}
+
+                {/* Status Feedback */}
+                {candidate.status === 'Hired' && (
+                   <div className="w-full py-3 bg-emerald-50 border border-emerald-100 text-emerald-700 text-center rounded-lg font-medium flex items-center justify-center gap-2">
+                     <Check className="w-5 h-5" /> Candidate Hired
+                   </div>
+                )}
+                
+                {candidate.status === 'Rejected' && (
+                   <div className="w-full py-3 bg-red-50 border border-red-100 text-red-600 text-center rounded-lg font-medium flex items-center justify-center gap-2">
+                     <ThumbsDown className="w-5 h-5" /> Candidate Rejected
+                   </div>
+                )}
+
               </CardContent>
             </Card>
 
@@ -288,7 +424,7 @@ const CandidateDetailPage = () => {
               </CardContent>
             </Card>
 
-            {/* Timeline / Activity */}
+            {/* Timeline */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -307,7 +443,24 @@ const CandidateDetailPage = () => {
                       </p>
                     </div>
                   </div>
-                  {/* Add more timeline items here */}
+                  {candidate.status === 'Hired' && (
+                    <div className="flex gap-3">
+                      <div className="w-2 h-2 rounded-full bg-emerald-600 mt-2"></div>
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">Hired</p>
+                        <p className="text-xs text-slate-500">Today</p>
+                      </div>
+                    </div>
+                  )}
+                  {candidate.status === 'Rejected' && (
+                    <div className="flex gap-3">
+                      <div className="w-2 h-2 rounded-full bg-red-600 mt-2"></div>
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">Rejected</p>
+                        <p className="text-xs text-slate-500">Today</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

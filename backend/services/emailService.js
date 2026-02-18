@@ -143,5 +143,27 @@ export const sendInterviewInvitationEmail = async (candidate, job, interview) =>
   }
 };
 
+/**
+ * Trigger 4: Interview Reminder (standalone)
+ * Can be called directly if you need to send/schedule a reminder outside the invitation flow.
+ */
+export const sendInterviewReminderEmail = async (candidate, interview) => {
+  const startTime = new Date(interview.scheduledAt || interview.date);
+  const reminderDate = new Date(startTime.getTime() - 24 * 60 * 60 * 1000);
+
+  if (reminderDate > new Date()) {
+    return scheduleEmail('interview_reminder', candidate.email, {
+      candidate_name: candidate.name,
+      interview_date: startTime.toLocaleString()
+    }, reminderDate);
+  }
+
+  // Already within 24h — send immediately
+  return sendTemplatedEmail('interview_reminder', candidate.email, {
+    candidate_name: candidate.name,
+    interview_date: startTime.toLocaleString()
+  });
+};
+
 // Alias
 export const sendEmail = sendTemplatedEmail;

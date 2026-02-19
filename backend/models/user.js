@@ -97,7 +97,28 @@ const UserSchema = new mongoose.Schema({
     createdAt: {
         type: Date,
         default: Date.now
+    },
+    integrations: {
+      google: {
+        googleId: String,
+        accessToken: String,
+        refreshToken: String,
+        tokenExpiry: Date,
+      },
+      linkedin: {
+        linkedinId: String,
+        accessToken: String,
+        refreshToken: String,
+        tokenExpiry: Date,
+      },
+      indeed: {
+        indeedId: String,
+        accessToken: String,
+        refreshToken: String,
+        tokenExpiry: Date,
+      }
     }
+
 });
 
 // Hash password before saving

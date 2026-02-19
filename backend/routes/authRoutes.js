@@ -1,6 +1,5 @@
 import { Router } from "express";
-import passport from 'passport'; // <--- NEW
-import '../config/passport.js';  // <--- NEW: Execute config
+import '../config/passport.js';  // Execute config on startup
 import { 
     signup, 
     verifyEmail, 
@@ -29,23 +28,6 @@ router.post("/refresh-token", refreshAccessToken);
 router.get("/me", protect, getMe);
 router.post("/logout", protect, logout);
 
-// --- GOOGLE CALENDAR OAUTH ROUTES (NEW) ---
-router.get('/google', passport.authenticate('google', { 
-  scope: ['profile', 'email', 'https://www.googleapis.com/auth/calendar'],
-  accessType: 'offline', // Crucial for Refresh Token
-  prompt: 'consent'      // Force consent to ensure we get the token
-}));
-
-router.get('/google/callback', 
-  passport.authenticate('google', { session: false, failureRedirect: '/login-failed' }),
-  (req, res) => {
-    // Successful authentication
-    res.send(`
-      <h1>Google Calendar Connected!</h1>
-      <p>You can close this window and return to the app.</p>
-    `);
-  }
-);
-// ------------------------------------------
+// Google Calendar OAuth is handled via /api/integrations/google to avoid duplicate routes
 
 export default router;

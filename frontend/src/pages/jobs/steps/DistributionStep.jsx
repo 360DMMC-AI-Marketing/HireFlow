@@ -20,16 +20,30 @@ const DistributionStep = ({ formData, setFormData }) => {
   // --- STATE ---
   const [slugCopied, setSlugCopied] = useState(false);
   const [emailCopied, setEmailCopied] = useState(false);
-  const [showPreview, setShowPreview] = useState(false); // For Modal
+  const [showPreview, setShowPreview] = useState(false);
   
-  // Simulation States (To make the "Connect" buttons work)
+  // Connection States — check if user already connected via OAuth
   const [isConnectingIndeed, setIsConnectingIndeed] = useState(false);
   const [indeedConnected, setIndeedConnected] = useState(false);
   
   const [isConnectingLinkedin, setIsConnectingLinkedin] = useState(false);
-  const [linkedinConnected, setLinkedinConnected] = useState(false); // Defaulting to false to show the connect flow
+  const [linkedinConnected, setLinkedinConnected] = useState(false);
 
-  const userTier = 'Pro'; // Example context
+  const userTier = 'Pro';
+
+  // Check URL params on mount for OAuth return
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const integration = params.get('integration');
+    if (integration === 'linkedin_success') {
+      setLinkedinConnected(true);
+      handleDistributionChange('linkedin', 'enabled', true);
+    }
+    if (integration === 'indeed_success') {
+      setIndeedConnected(true);
+      handleDistributionChange('indeed', 'enabled', true);
+    }
+  }, []);
 
   // --- HANDLERS ---
 
@@ -60,24 +74,18 @@ const DistributionStep = ({ formData, setFormData }) => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Simulate Connecting to Indeed
+  // Connect to Indeed via real OAuth flow
   const handleIndeedConnect = () => {
     setIsConnectingIndeed(true);
-    setTimeout(() => {
-      setIndeedConnected(true);
-      setIsConnectingIndeed(false);
-      handleDistributionChange('indeed', 'enabled', true); // Auto-enable switch
-    }, 1500);
+    // Redirect to backend OAuth endpoint
+    window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/integrations/indeed`;
   };
 
-  // Simulate Connecting to LinkedIn
+  // Connect to LinkedIn via real OAuth flow
   const handleLinkedinConnect = () => {
     setIsConnectingLinkedin(true);
-    setTimeout(() => {
-      setLinkedinConnected(true);
-      setIsConnectingLinkedin(false);
-      handleDistributionChange('linkedin', 'enabled', true); // Auto-enable switch
-    }, 1500);
+    // Redirect to backend OAuth endpoint
+    window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/integrations/linkedin`;
   };
 
   return (

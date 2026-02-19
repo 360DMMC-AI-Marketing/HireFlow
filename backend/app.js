@@ -20,7 +20,12 @@ import emailsRouter from './routes/emails.js';
 import emailTemplatesRouter from './routes/email-templates.js';
 import scheduleRouter from './routes/schedule.js';
 import errorHandler from './middleware/errorHandler.js';
+import session from 'express-session'; // <-- 1. Import this
+import dotenv from 'dotenv';
+dotenv.config();
+
 const app = express();
+
 
 // ============================================================
 // 🌐 CORS CONFIGURATION (Must be first!)
@@ -85,6 +90,15 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'super_secret_hireflow_key', // You can add SESSION_SECRET to your .env later
+  resave: false,
+  saveUninitialized: false
+}));
+
+// 3. Initialize Passport
+app.use(passport.initialize());
+app.use(passport.session());
 // 3. Mongo Sanitize: Data Sanitization against NoSQL query injection
 // ⚠️ TEMPORARILY DISABLED - express-mongo-sanitize v2.2.0 is incompatible with Express 5
 // TODO: Re-enable when library is updated or switch to Express 4.x

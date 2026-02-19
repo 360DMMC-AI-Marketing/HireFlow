@@ -38,8 +38,14 @@ import {
   Phone,
   MapPin as MapPinIcon,
   Star,
-  ExternalLink
+  ExternalLink,
+  Share2,
+  Linkedin,
+  Loader2,
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 const JobDetailPage = () => {
   const { id } = useParams();
@@ -50,6 +56,8 @@ const JobDetailPage = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [actionType, setActionType] = useState('');
+  const [distributing, setDistributing] = useState(false);
+  const [distributionStatus, setDistributionStatus] = useState(null);
 
   useEffect(() => {
     fetchJobDetails();
@@ -59,6 +67,7 @@ const JobDetailPage = () => {
   useEffect(() => {
     if (job) {
       fetchCandidates();
+      fetchDistributionStatus();
     }
   }, [id, job?.title]);
 
@@ -88,6 +97,53 @@ const JobDetailPage = () => {
       setCandidates(jobCandidates);
     } catch (error) {
       console.error('Error fetching candidates:', error);
+    }
+  };
+
+  const fetchDistributionStatus = async () => {
+    try {
+      const response = await api.get(`/jobs/${id}/distribute/status`);
+      setDistributionStatus(response.data);
+    } catch (error) {
+      // Not critical if this fails
+      console.error('Error fetching distribution status:', error);
+    }
+  };
+
+  const handleDistribute = async () => {
+    setDistributing(true);
+    try {
+      const response = await api.post(`/jobs/${id}/distribute`);
+      toast.success('Job distributed!', { description: 'Check distribution status below.' });
+      setDistributionStatus(null);
+      fetchDistributionStatus();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Distribution failed');
+    } finally {
+      setDistributing(false);
+    }
+  };
+
+  const handleDistributePlatform = async (platform) => {
+    setDistributing(true);
+    try {
+      await api.post(`/jobs/${id}/distribute/${platform}`);
+      toast.success(`Posted to ${platform}!`);
+      fetchDistributionStatus();
+    } catch (error) {
+      toast.error(error.response?.data?.message || `Failed to post to ${platform}`);
+    } finally {
+      setDistributing(false);
+    }
+  };
+
+  const handleRemovePlatform = async (platform) => {
+    try {
+      await api.delete(`/jobs/${id}/distribute/${platform}`);
+      toast.success(`Removed from ${platform}`);
+      fetchDistributionStatus();
+    } catch (error) {
+      toast.error(error.response?.data?.message || `Failed to remove from ${platform}`);
     }
   };
 
@@ -202,6 +258,17 @@ const JobDetailPage = () => {
             </div>
 
             <div className="flex items-center gap-2">
+              {job.status === 'Active' && (
+                <Button
+                  onClick={handleDistribute}
+                  disabled={distributing}
+                  variant="outline"
+                  className="flex items-center gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                >
+                  {distributing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
+                  {distributing ? 'Distributing...' : 'Distribute Job'}
+                </Button>
+              )}
               <Button
                 onClick={() => navigate(`/dashboard/jobs/${id}/edit`)}
                 className="flex items-center gap-2"
@@ -569,23 +636,70 @@ const JobDetailPage = () => {
                   </p>
                 </div>
 
-                {/* Distribution Channels */}
+                {/* Distribution Channels — Dynamic Status */}
                 <div className="space-y-3 pt-3 border-t">
                   <div className="text-sm font-semibold text-slate-700 mb-2">Distribution Channels</div>
-                  {job.distribution?.linkedin?.enabled && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-700">LinkedIn</span>
-                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
-                        Active
-                      </Badge>
-                    </div>
-                  )}
-                  {job.distribution?.indeed?.enabled && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-700">Indeed</span>
-                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
-                        Active
-                      </Badge>
+                  
+                  {/* LinkedIn */}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2 text-slate-700">
+                      <Linkedin className="w-4 h-4 text-[#0077b5]" />
+                      LinkedIn
+                    </span>
+                    {distributionStatus?.linkedin?.postingStatus === 'posted' ? (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">Posted</Badge>
+                        <button onClick={() => handleRemovePlatform('linkedin')} className="text-xs text-red-500 hover:underline">Remove</button>
+                      </div>
+                    ) : distributionStatus?.linkedin?.postingStatus === 'pending' ? (
+                      <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-300">Pending</Badge>
+                    ) : distributionStatus?.linkedin?.postingStatus === 'failed' ? (
+                      <div className="flex items-center gap-1">
+                        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-300">Failed</Badge>
+                        <button onClick={() => handleDistributePlatform('linkedin')} className="text-xs text-indigo-600 hover:underline">Retry</button>
+                      </div>
+                    ) : job.distribution?.linkedin?.enabled ? (
+                      <button 
+                        onClick={() => handleDistributePlatform('linkedin')} 
+                        disabled={distributing}
+                        className="text-xs text-indigo-600 hover:underline font-medium"
+                      >
+                        Post Now
+                      </button>
+                    ) : (
+                      <span className="text-xs text-slate-400">Not enabled</span>
+                    )}
+                  </div>
+
+                  {/* Indeed */}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2 text-slate-700">
+                      <span className="w-4 h-4 bg-blue-800 rounded text-white text-[10px] font-bold flex items-center justify-center">i</span>
+                      Indeed
+                    </span>
+                    {distributionStatus?.indeed?.postingStatus === 'posted' ? (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">In Feed</Badge>
+                        <button onClick={() => handleRemovePlatform('indeed')} className="text-xs text-red-500 hover:underline">Remove</button>
+                      </div>
+                    ) : job.distribution?.indeed?.enabled ? (
+                      <button 
+                        onClick={() => handleDistributePlatform('indeed')} 
+                        disabled={distributing}
+                        className="text-xs text-indigo-600 hover:underline font-medium"
+                      >
+                        Add to Feed
+                      </button>
+                    ) : (
+                      <span className="text-xs text-slate-400">Not enabled</span>
+                    )}
+                  </div>
+
+                  {/* Error message display */}
+                  {distributionStatus?.linkedin?.lastError && (
+                    <div className="flex items-start gap-2 p-2 bg-red-50 border border-red-100 rounded-lg text-xs text-red-600">
+                      <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                      <span>LinkedIn: {distributionStatus.linkedin.lastError}</span>
                     </div>
                   )}
                   {job.distribution?.hireflowPortal?.enabled && (

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { Briefcase, Globe, Users, MoreVertical, Linkedin, Globe as WebIcon } from "lucide-react";
+import { Briefcase, Globe, Users, MoreVertical, Linkedin, Globe as WebIcon, CheckCircle2, AlertCircle } from "lucide-react";
 
 const JobCard = ({ job, onUpdate }) => {
   const navigate = useNavigate();
@@ -74,31 +74,44 @@ const JobCard = ({ job, onUpdate }) => {
         <div className="flex items-center gap-4">
           <div className="flex flex-col items-end gap-2">
             <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-              Marketplace Sync
+              Distribution
             </span>
             <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 rounded-full hover:bg-blue-50 text-blue-600"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Handle LinkedIn action
-                }}
+              {/* LinkedIn status */}
+              <div 
+                className={`h-8 w-8 rounded-full flex items-center justify-center ${
+                  job.distribution?.linkedin?.postingStatus === 'posted'
+                    ? 'bg-green-50 text-green-600'
+                    : job.distribution?.linkedin?.postingStatus === 'failed'
+                    ? 'bg-red-50 text-red-500'
+                    : job.distribution?.linkedin?.enabled
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'bg-slate-50 text-slate-300'
+                }`}
+                title={
+                  job.distribution?.linkedin?.postingStatus === 'posted' ? 'Posted to LinkedIn' :
+                  job.distribution?.linkedin?.postingStatus === 'failed' ? 'LinkedIn posting failed' :
+                  job.distribution?.linkedin?.enabled ? 'LinkedIn enabled' : 'LinkedIn not enabled'
+                }
               >
                 <Linkedin className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 rounded-full hover:bg-emerald-50 text-emerald-600"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Handle website action
-                }}
+              </div>
+              {/* Indeed status */}
+              <div 
+                className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                  job.distribution?.indeed?.postingStatus === 'posted'
+                    ? 'bg-green-50 text-green-600'
+                    : job.distribution?.indeed?.enabled
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'bg-slate-50 text-slate-300'
+                }`}
+                title={
+                  job.distribution?.indeed?.postingStatus === 'posted' ? 'Listed on Indeed feed' :
+                  job.distribution?.indeed?.enabled ? 'Indeed enabled' : 'Indeed not enabled'
+                }
               >
-                <WebIcon className="w-4 h-4" />
-              </Button>
+                i
+              </div>
             </div>
           </div>
 

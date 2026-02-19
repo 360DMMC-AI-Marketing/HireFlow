@@ -68,7 +68,15 @@ const jobSchema = new mongoose.Schema({
       enabled: { type: Boolean, default: false },
       seniorityLevel: String,
       jobFunction: String,
-      sponsored: { type: Boolean, default: false }
+      sponsored: { type: Boolean, default: false },
+      postingStatus: {
+        type: String,
+        enum: ['not_posted', 'pending', 'posted', 'failed', 'removed'],
+        default: 'not_posted'
+      },
+      externalPostId: String,
+      postedAt: Date,
+      lastError: String
     },
     indeed: {
       enabled: { type: Boolean, default: false },
@@ -78,7 +86,15 @@ const jobSchema = new mongoose.Schema({
         default: 'Hide'
       },
       screeningQuestions: [String],
-      sponsored: { type: Boolean, default: false }
+      sponsored: { type: Boolean, default: false },
+      postingStatus: {
+        type: String,
+        enum: ['not_posted', 'pending', 'posted', 'failed', 'removed'],
+        default: 'not_posted'
+      },
+      externalPostId: String,
+      postedAt: Date,
+      lastError: String
     },
     hireflowPortal: {
       enabled: { type: Boolean, default: true },

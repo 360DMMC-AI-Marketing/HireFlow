@@ -3,6 +3,8 @@ import { Outlet } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import api from "@/utils/axios";
+import { PageBreadcrumb } from "@/components/PageBreadcrumb";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 export const DashboardLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -39,7 +41,10 @@ export const DashboardLayout = () => {
         {/* Page Content */}
         <div className="p-4 lg:p-8 pb-20">
           <div className="max-w-7xl mx-auto">
-            <Outlet />
+            <PageBreadcrumb />
+            <ErrorBoundary>
+              <Outlet />
+            </ErrorBoundary>
           </div>
         </div>
       </main>

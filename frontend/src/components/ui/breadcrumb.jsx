@@ -8,7 +8,7 @@ function Breadcrumb({ ...props }) {
   return <nav aria-label="breadcrumb" data-slot="breadcrumb" {...props} />;
 }
 
-function BreadcrumbList({ ...props }) {
+function BreadcrumbList({ className, ...props }) {
   return (
     <ol
       data-slot="breadcrumb-list"
@@ -21,7 +21,7 @@ function BreadcrumbList({ ...props }) {
   );
 }
 
-function BreadcrumbItem({ ...props }) {
+function BreadcrumbItem({ className, ...props }) {
   return (
     <li
       data-slot="breadcrumb-item"
@@ -31,7 +31,7 @@ function BreadcrumbItem({ ...props }) {
   );
 }
 
-function BreadcrumbLink({ ...props }) {
+function BreadcrumbLink({ className, asChild, ...props }) {
   const Comp = asChild ? Slot : "a";
 
   return (
@@ -43,7 +43,7 @@ function BreadcrumbLink({ ...props }) {
   );
 }
 
-function BreadcrumbPage({ ...props }) {
+function BreadcrumbPage({ className, ...props }) {
   return (
     <span
       data-slot="breadcrumb-page"
@@ -56,7 +56,7 @@ function BreadcrumbPage({ ...props }) {
   );
 }
 
-function BreadcrumbSeparator({ ...props }) {
+function BreadcrumbSeparator({ className, children, ...props }) {
   return (
     <li
       data-slot="breadcrumb-separator"
@@ -70,7 +70,7 @@ function BreadcrumbSeparator({ ...props }) {
   );
 }
 
-function BreadcrumbEllipsis({ ...props }) {
+function BreadcrumbEllipsis({ className, ...props }) {
   return (
     <span
       data-slot="breadcrumb-ellipsis"

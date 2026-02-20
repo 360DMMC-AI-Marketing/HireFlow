@@ -21,7 +21,7 @@ const menuItems = [
   { id: "candidates", label: "Candidates", icon: Users, path: "/dashboard/candidates" },
   { id: "interviews", label: "Interview System", icon: Calendar, path: "/dashboard/interviews" },
   { id: "aivideo", label: "AI Video Assessment", icon: Video, path: "/dashboard/ai-video" },
-  { id: "analytics", label: "Analytics", icon: BarChart3, path: "/dashboard/analytics" }
+  { id: "analytics", label: "Analytics", icon: BarChart3, path: "/dashboard/analytics" },
 ];
 
 export const Sidebar = ({ isOpen, onClose }) => {

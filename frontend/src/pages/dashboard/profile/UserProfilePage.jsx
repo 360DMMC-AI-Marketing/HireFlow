@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { User, Building, Lock, Bell, Upload } from 'lucide-react';
+import { User, Lock, Bell, Upload } from 'lucide-react';
 
 const UserProfilePage = () => {
   
@@ -22,12 +22,6 @@ const UserProfilePage = () => {
     department: '',
     bio: '',
     avatar: '',
-    company: {
-      name: '',
-      website: '',
-      size: '',
-      industry: ''
-    }
   });
 
   const [password, setPassword] = useState({
@@ -91,16 +85,6 @@ const UserProfilePage = () => {
     }));
   };
 
-  const handleCompanyChange = (field, value) => {
-    setUser(prev => ({
-      ...prev,
-      company: {
-        ...(prev.company || {}),
-        [field]: value
-      }
-    }));
-  };
-
   const handlePasswordChange = (field, value) => {
     setPassword(prev => ({
       ...prev,
@@ -161,47 +145,6 @@ const UserProfilePage = () => {
     const msg = error?.response?.status === 404 
       ? 'Backend not available - changes saved locally only' 
       : error?.response?.data?.message || error?.message || 'Failed to update profile';
-    
-    try { toast.warning(String(msg)); } catch (e) { console.warn(msg); }
-  }
-};
-
- const handleSaveCompany = async () => {
-  try {
-    const token = localStorage.getItem('token'); 
-    if (!token) {
-      toast.error("You are not logged in!");
-      return;
-    }
-
-    // Only send company-related fields
-    const companyData = {
-      company: {
-        name: user.company?.name || '',
-        website: user.company?.website || '',
-        size: user.company?.size || '',
-        industry: user.company?.industry || ''
-      }
-    };
-
-    const response = await axios.put('http://localhost:5000/api/user/profile', companyData, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-
-    const saved = normalizeUser(response.data?.user || user);
-    setUser(saved);
-    localStorage.setItem('user', JSON.stringify(saved));
-    
-    try {
-      window.dispatchEvent(new CustomEvent('userUpdated', { detail: saved }));
-    } catch (e) {}
-
-    toast.success('Company information updated successfully!');
-  } catch (error) {
-    console.error('Error saving company:', error);
-    const msg = error?.response?.status === 404 
-      ? 'Backend not available - changes saved locally only' 
-      : error?.response?.data?.message || error?.message || 'Failed to update company';
     
     try { toast.warning(String(msg)); } catch (e) { console.warn(msg); }
   }
@@ -297,19 +240,15 @@ const UserProfilePage = () => {
     <div className="min-h-screen bg-slate-50 p-4 md:p-8">
       <div className="max-w-5xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900">Profile & Settings</h1>
-          <p className="text-slate-600 mt-1">Manage your account settings and preferences</p>
+          <h1 className="text-3xl font-bold text-slate-900">Profile</h1>
+          <p className="text-slate-600 mt-1">Manage your account and preferences</p>
         </div>
 
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+          <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid">
             <TabsTrigger value="profile" className="flex items-center gap-2">
               <User className="w-4 h-4" />
               Profile
-            </TabsTrigger>
-            <TabsTrigger value="company" className="flex items-center gap-2">
-              <Building className="w-4 h-4" />
-              Company
             </TabsTrigger>
             <TabsTrigger value="security" className="flex items-center gap-2">
               <Lock className="w-4 h-4" />
@@ -444,61 +383,6 @@ const UserProfilePage = () => {
                 <div className="flex justify-end">
                   <Button onClick={handleSaveProfile} className="bg-indigo-600 hover:bg-indigo-700">
                     Save Profile
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Company Tab */}
-          <TabsContent value="company" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Company Information</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="companyName">Company Name</Label>
-                  <Input
-                    id="companyName"
-                    value={user.company?.name ?? ''}
-                    onChange={(e) => handleCompanyChange('name', e.target.value)}
-                    placeholder="Acme Inc."
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="website">Website</Label>
-                  <Input
-                    id="website"
-                    type="url"
-                    value={user.company?.website ?? ''}
-                    onChange={(e) => handleCompanyChange('website', e.target.value)}
-                    placeholder="https://example.com"
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="companySize">Company Size</Label>
-                    <Input
-                      id="companySize"
-                      value={user.company?.size ?? ''}
-                      onChange={(e) => handleCompanyChange('size', e.target.value)}
-                      placeholder="1-50 employees"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="industry">Industry</Label>
-                    <Input
-                      id="industry"
-                      value={user.company?.industry ?? ''}
-                      onChange={(e) => handleCompanyChange('industry', e.target.value)}
-                      placeholder="Technology"
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end">
-                  <Button onClick={handleSaveCompany} className="bg-indigo-600 hover:bg-indigo-700">
-                    Save Company Info
                   </Button>
                 </div>
               </CardContent>

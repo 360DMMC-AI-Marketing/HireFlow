@@ -105,7 +105,10 @@ export const InterviewsView = () => {
           <Settings className="w-4 h-4" />
           Settings
         </button>
-        <button className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2">
+        <button 
+          onClick={() => navigate('/dashboard/email-templates')}
+          className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2"
+        >
           <Mail className="w-4 h-4" />
           Email Templates
         </button>

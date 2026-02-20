@@ -1,6 +1,7 @@
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { AuthLayout } from "@/pages/auth/shared/AuthLayout";
 import { LoginPage } from "@/pages/auth/login/LoginPage";
 import { SignupPage } from "@/pages/auth/signup/SignupPage";
@@ -19,15 +20,18 @@ import { CandidatesView } from "@/pages/dashboard/views/CandidatesView";
 import AddCandidatePage from "@/pages/candidates/AddCandidatePage";
 import CandidateDetailPage from "@/pages/candidates/CandidateDetailPage";
 import { InterviewsView } from "@/pages/dashboard/views/InterviewsView";
-import InterviewSettingsPage from "@/pages/dashboard/interviews/InterviewSettingsPage"; // <--- NEW IMPORT
+import InterviewSettingsPage from "@/pages/dashboard/interviews/InterviewSettingsPage";
 import ScheduleInterview from "@/pages/public/ScheduleInterview";
 import { AIVideoView } from "@/pages/dashboard/views/AIVideoView";
 import { AnalyticsView } from "@/pages/dashboard/analytics/AnalyticsView.jsx";
 import { ANALYTICS_DATA } from "@/utils/data/dashboardData";
+import SettingsPage from "@/pages/dashboard/settings/SettingsPage";
+import EmailTemplatesPage from "@/pages/dashboard/email-templates/EmailTemplatesPage";
+import EmailActivityPage from "@/pages/dashboard/email-templates/EmailActivityPage";
 
 export default function HireFlowDashboard() {
   return (
-    <>
+    <ErrorBoundary>
       <Toaster position="top-center" richColors />
       <Routes>
         {/* Public Job Application Route */}
@@ -86,18 +90,22 @@ export default function HireFlowDashboard() {
           
           {/* Interview Routes */}
           <Route path="interviews" element={<InterviewsView />} />
-          <Route path="interviews/settings" element={<InterviewSettingsPage />} /> {/* <--- NEW ROUTE */}
+          <Route path="interviews/settings" element={<InterviewSettingsPage />} />
           
           <Route path="ai-video" element={<AIVideoView />} />
           <Route path="analytics" element={<AnalyticsView analyticsData={ANALYTICS_DATA} />} />
           <Route path="profile" element={<UserProfile />} />
-          <Route path="settings" element={<UserProfile />} />
+          <Route path="settings" element={<SettingsPage />} />
+          
+          {/* Email Templates */}
+          <Route path="email-templates" element={<EmailTemplatesPage />} />
+          <Route path="email-activity" element={<EmailActivityPage />} />
         </Route>
         
         {/* Default redirect */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
-    </>
+    </ErrorBoundary>
   );
 }

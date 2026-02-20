@@ -1,16 +1,21 @@
-import  {Router} from "express";
-const router=Router();
-router.get('/api/team/members',(req,res)=>{
-    res.send('Team Members API is working');
+import { Router } from "express";
+import { protect } from '../middleware/auth.js';
+
+const router = Router();
+
+router.use(protect);
+
+router.get('/members', (req, res) => {
+    res.json({ success: true, members: [], message: 'Team Members API' });
 });
-router.post('/api/team/invite',(req,res)=>{
-    res.send('Team Invite API is working');
+router.post('/invite', (req, res) => {
+    res.json({ success: true, message: 'Team Invite API' });
 });
-router.patch('/api/team/:userId/role',(req,res)=>{
-    res.send('Team Remove Member API is working');
+router.patch('/:userId/role', (req, res) => {
+    res.json({ success: true, message: 'Role updated' });
 });
-router.delete('/api/team/:userId',(req,res)=>{
-    res.send('Team Remove Member API is working');
-}   );
+router.delete('/:userId', (req, res) => {
+    res.json({ success: true, message: 'Member removed' });
+});
 
 export default router;

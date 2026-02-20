@@ -1,6 +1,5 @@
 import express from 'express';
 import * as trackingController from '../controllers/emailTrackingController.js';
-// IMPORT FIX: Use curly braces to match the "export const" names
 import { 
   getAllTemplates, 
   createTemplate, 
@@ -8,11 +7,13 @@ import {
   updateTemplate,
   deleteTemplate
 } from '../controllers/emailTemplateController.js';
-
-// IMPORT FIX: Import the service function
 import { sendEmail } from '../services/emailService.js'; 
+import { protect } from '../middleware/auth.js';
 
 const router = express.Router();
+
+// Protect all template routes
+router.use(protect);
 
 
 // 1. GET all templates

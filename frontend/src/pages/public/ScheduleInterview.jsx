@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Calendar, Clock, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
-import { validateScheduleToken, bookViaToken } from '../../services/api/InterviewSettingsPage';
+import axios from 'axios';
 import { format } from 'date-fns';
 
 const ScheduleInterview = () => {
@@ -11,11 +11,13 @@ const ScheduleInterview = () => {
   const [error, setError] = useState(null);
   const [booked, setBooked] = useState(false);
 
-  // Data from magic link validation
+  // Data
   const [candidate, setCandidate] = useState(null);
   const [job, setJob] = useState(null);
   const [slots, setSlots] = useState([]);
   const [selectedSlot, setSelectedSlot] = useState(null);
+
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     loadScheduleData();
@@ -24,10 +26,22 @@ const ScheduleInterview = () => {
   const loadScheduleData = async () => {
     try {
       setLoading(true);
-      const data = await validateScheduleToken(token);
-      setCandidate(data.candidate);
-      setJob(data.job);
-      setSlots(data.slots);
+      
+      // 1. Get Candidate and Job from the magic link
+      const tokenRes = await axios.get(`${apiUrl}/interviews/schedule/${token}`);
+      setCandidate(tokenRes.data.candidate);
+      setJob(tokenRes.data.job);
+
+      // 2. Fetch the slots from the endpoint you KNOW works!
+      const slotsRes = await axios.get(`${apiUrl}/interviews/slots`);
+      
+      // Handle depending on if your backend returns an array or an object like { data: [...] }
+      const slotsData = Array.isArray(slotsRes.data) ? slotsRes.data : slotsRes.data.data || [];
+      
+      // Filter out slots that are already booked (optional, if your backend doesn't do it)
+      const availableSlots = slotsData.filter(slot => slot.isAvailable !== false);
+      setSlots(availableSlots);
+
     } catch (err) {
       setError(err.response?.data?.message || 'Invalid or expired scheduling link');
     } finally {
@@ -38,8 +52,16 @@ const ScheduleInterview = () => {
   const handleBook = async () => {
     if (!selectedSlot) return;
     setBooking(true);
+    
     try {
-      await bookViaToken(token, selectedSlot);
+      // 3. Post to your working /book endpoint with the exact payload it expects
+      const payload = {
+        candidateId: candidate._id || candidate.id,
+        jobId: job._id || job.id,
+        slotId: selectedSlot
+      };
+
+      await axios.post(`${apiUrl}/interviews/book`, payload);
       setBooked(true);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to book interview');
@@ -128,32 +150,37 @@ const ScheduleInterview = () => {
             </p>
           ) : (
             <div className="space-y-3">
-              {slots.map((slot) => (
-                <button
-                  key={slot.id}
-                  onClick={() => { setSelectedSlot(slot.id); setError(null); }}
-                  className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
-                    selectedSlot === slot.id
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center space-x-3">
-                    <Clock className={`w-5 h-5 ${selectedSlot === slot.id ? 'text-blue-600' : 'text-gray-400'}`} />
-                    <div className="text-left">
-                      <p className="font-medium text-gray-900">
-                        {format(new Date(slot.startTime), 'EEEE, MMMM d, yyyy')}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {format(new Date(slot.startTime), 'h:mm a')} – {format(new Date(slot.endTime), 'h:mm a')}
-                      </p>
+              {slots.map((slot) => {
+                // MongoDB uses _id, so we ensure we grab the right identifier
+                const slotId = slot._id || slot.id;
+                
+                return (
+                  <button
+                    key={slotId}
+                    onClick={() => { setSelectedSlot(slotId); setError(null); }}
+                    className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
+                      selectedSlot === slotId
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <Clock className={`w-5 h-5 ${selectedSlot === slotId ? 'text-blue-600' : 'text-gray-400'}`} />
+                      <div className="text-left">
+                        <p className="font-medium text-gray-900">
+                          {format(new Date(slot.startTime), 'EEEE, MMMM d, yyyy')}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {format(new Date(slot.startTime), 'h:mm a')} – {format(new Date(slot.endTime), 'h:mm a')}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  {selectedSlot === slot.id && (
-                    <CheckCircle className="w-5 h-5 text-blue-600" />
-                  )}
-                </button>
-              ))}
+                    {selectedSlot === slotId && (
+                      <CheckCircle className="w-5 h-5 text-blue-600" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
 

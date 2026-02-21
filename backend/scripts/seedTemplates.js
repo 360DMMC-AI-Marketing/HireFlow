@@ -56,6 +56,24 @@ const templates = [
     `,
     variables: ['candidate_name', 'interview_date'],
     isActive: true
+  },
+  {
+    name: 'scheduling_link',
+    subject: 'Schedule Your Interview: {{job_title}}',
+    bodyHtml: `
+      <h1>Great news, {{candidate_name}}!</h1>
+      <p>We'd like to move forward with your application for the <strong>{{job_title}}</strong> position at {{company_name}}.</p>
+      <p>Please choose a time that works best for you by clicking the link below:</p>
+      <p style="margin: 24px 0;">
+        <a href="{{scheduling_link}}" style="background-color: #6366f1; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">
+          Schedule Your Interview
+        </a>
+      </p>
+      <p>This link is valid for 7 days.</p>
+      <p>Best regards,<br>{{company_name}} Team</p>
+    `,
+    variables: ['candidate_name', 'job_title', 'scheduling_link', 'company_name'],
+    isActive: true
   }
 ];
 

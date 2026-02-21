@@ -50,10 +50,13 @@ const InterviewSettingsPage = () => {
     }
   };
 
-  const handleConnectGoogle = () => {
-    connectGoogleCalendar();
+ const handleConnectGoogle = () => {
+    // DO NOT use axios or fetch here!
+    // We must physically redirect the browser to the backend OAuth route.
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+    window.location.href = `${apiUrl}/integrations/google`;
   };
-
+  
   const handleDeleteSlot = async (slotId) => {
     try {
       await deleteInterviewSlot(slotId);

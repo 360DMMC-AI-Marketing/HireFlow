@@ -54,6 +54,12 @@ const InterviewSchema = new mongoose.Schema({
     type: Number, 
     min: 1, 
     max: 5 
+  },
+  
+  // Reminder tracking
+  reminderSent: {
+    type: Boolean,
+    default: false
   }
 }, { 
   timestamps: true 

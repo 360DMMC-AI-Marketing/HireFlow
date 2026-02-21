@@ -152,10 +152,6 @@ async function triggerResumeProcessing(candidate, file, jobId) {
 // CONTROLLERS
 // ═════════════════════════════════════════════════════════════════════════════
 
-/**
- * PUBLIC — POST /api/candidates/apply
- * Candidates submit applications through the career page (no auth).
- */
 export const applyForJob = async (req, res) => {
   console.log('📝 Received application submission');
   try {
@@ -181,7 +177,6 @@ export const applyForJob = async (req, res) => {
       candidateData.jobId = jobId;
     }
 
-    // ── Create candidate ──
     let candidate;
     try {
       candidate = await Candidate.create(candidateData);
@@ -200,7 +195,6 @@ export const applyForJob = async (req, res) => {
       throw createErr;
     }
 
-    // ── Email trigger: Application Received ──
     try {
       const job = jobId ? await Job.findById(jobId) : null;
       const jobInfo = job || { title: positionApplied || 'General Application' };
@@ -210,7 +204,6 @@ export const applyForJob = async (req, res) => {
       console.error('📧 Could not prepare application email:', emailErr.message);
     }
 
-    // ── Trigger AI resume processing ──
     if (req.file && jobId) {
       triggerResumeProcessing(candidate, req.file, jobId);
     }
@@ -226,10 +219,6 @@ export const applyForJob = async (req, res) => {
   }
 };
 
-/**
- * GET /api/candidates
- * List all candidates (with optional filters).
- */
 export const getAllCandidates = async (req, res) => {
   try {
     const { status, jobId, search } = req.query;
@@ -253,12 +242,9 @@ export const getAllCandidates = async (req, res) => {
   }
 };
 
-/**
- * GET /api/candidates/:id
- */
 export const getCandidateById = async (req, res) => {
   try {
-    const candidate = await Candidate.findById(req.params.id).populate('jobId'); // Populated to help with job info
+    const candidate = await Candidate.findById(req.params.id).populate('jobId'); 
     if (!candidate) {
       return res.status(404).json({ success: false, message: 'Candidate not found' });
     }
@@ -269,10 +255,6 @@ export const getCandidateById = async (req, res) => {
   }
 };
 
-/**
- * GET /api/candidates/:id/resume
- * Serve the resume file (inline display or download).
- */
 export const getResume = async (req, res) => {
   try {
     const { promises: fs } = await import('fs');
@@ -284,7 +266,6 @@ export const getResume = async (req, res) => {
 
     const absolutePath = path.resolve(BACKEND_DIR, candidate.resumePath);
 
-    // Verify file exists
     try { await fs.access(absolutePath); } catch {
       return res.status(404).json({ success: false, message: 'Resume file not found on disk' });
     }
@@ -314,14 +295,10 @@ export const getResume = async (req, res) => {
   }
 };
 
-/**
- * POST /api/candidates  (admin/recruiter manual creation)
- */
 export const createCandidate = async (req, res) => {
   try {
     const candidate = await Candidate.create(req.body);
 
-    // ── Email trigger: Application Received (for manually-added candidates too) ──
     try {
       const job = candidate.jobId ? await Job.findById(candidate.jobId) : null;
       const jobInfo = job || { title: candidate.positionApplied || 'General Application' };
@@ -341,10 +318,6 @@ export const createCandidate = async (req, res) => {
   }
 };
 
-/**
- * PATCH /api/candidates/:id/status
- * Update a candidate's pipeline status — sends rejection email when status = 'Rejected'.
- */
 export const updateCandidateStatus = async (req, res) => {
   try {
     const { status, rejectionReason } = req.body;
@@ -366,7 +339,7 @@ export const updateCandidateStatus = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Candidate not found' });
     }
 
-    // ── AUTOMATION: Trigger Emails based on Status ──
+    // ── AUTOMATION: Trigger Rejection Email ──
     if (status === 'Rejected') {
       try {
         const job = candidate.jobId ? await Job.findById(candidate.jobId) : null;
@@ -374,7 +347,6 @@ export const updateCandidateStatus = async (req, res) => {
         
         console.log(`📉 Sending rejection email to ${candidate.email}`);
         
-        // Non-blocking email send
         sendRejectionEmail(candidate, jobInfo, rejectionReason)
           .catch(err => console.error('📧 Rejection email failed (non-blocking):', err.message));
       } catch (emailErr) {
@@ -382,7 +354,37 @@ export const updateCandidateStatus = async (req, res) => {
       }
     }
     
-    // Optional: Log other status changes
+    // ── AUTOMATION: Send scheduling magic link when status → Interview ──
+    if (status === 'Interview') {
+      try {
+        const { generateMagicToken } = await import('../services/interviewService.js');
+        const { sendSchedulingLinkEmail } = await import('../services/emailService.js');
+        
+        // Safely extract Job ID
+        const jobId = candidate.jobId?._id || candidate.jobId;
+
+        if (jobId) {
+          const job = await Job.findById(jobId);
+          const jobInfo = job || { title: candidate.positionApplied || 'Position', _id: jobId };
+
+          // Stringify IDs for token generation to prevent errors
+          const token = await generateMagicToken(candidate._id.toString(), jobId.toString());
+          const baseUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+          const schedulingLink = `${baseUrl}/schedule/${token}`;
+
+          console.log(`📅 [Backend] Sending scheduling link to ${candidate.email}: ${schedulingLink}`);
+
+          sendSchedulingLinkEmail(candidate, jobInfo, schedulingLink)
+             .then(() => console.log(`✅ [Backend] Scheduling link email queued successfully!`))
+             .catch(err => console.error('📧 [Backend] Scheduling link email failed:', err.message));
+        } else {
+          console.warn(`⚠️ Skipped scheduling email for ${candidate.email} - No Job ID assigned.`);
+        }
+      } catch (emailErr) {
+        console.error('❌ [Backend] System error during magic link generation:', emailErr);
+      }
+    }
+
     if (status === 'Hired') {
         console.log(`🎉 Candidate ${candidate.email} was HIRED!`);
     }
@@ -394,9 +396,6 @@ export const updateCandidateStatus = async (req, res) => {
   }
 };
 
-/**
- * PATCH /api/candidates/bulk-updates
- */
 export const bulkUpdateCandidates = async (req, res) => {
   try {
     const { ids, updates } = req.body;
@@ -409,7 +408,6 @@ export const bulkUpdateCandidates = async (req, res) => {
       { $set: updates }
     );
 
-    // ── Email trigger: Bulk rejection ──
     if (updates.status === 'Rejected') {
       try {
         const rejectedCandidates = await Candidate.find({ _id: { $in: ids } });
@@ -436,9 +434,6 @@ export const bulkUpdateCandidates = async (req, res) => {
   }
 };
 
-/**
- * DELETE /api/candidates/bulk
- */
 export const bulkDeleteCandidates = async (req, res) => {
   try {
     const { ids } = req.body;
@@ -453,9 +448,6 @@ export const bulkDeleteCandidates = async (req, res) => {
   }
 };
 
-/**
- * DELETE /api/candidates/:id
- */
 export const deleteCandidate = async (req, res) => {
   try {
     const candidate = await Candidate.findByIdAndDelete(req.params.id);

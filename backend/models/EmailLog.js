@@ -12,7 +12,11 @@ const emailLogSchema = new mongoose.Schema({
   error: { type: String },
   jobId: { type: String },
   sentAt: { type: Date },
-  scheduledAt: { type: Date } // <--- NEW FIELD
+  scheduledAt: { type: Date },
+  deliveredAt: { type: Date },
+  openedAt: { type: Date },
+  bouncedAt: { type: Date },
+  clickedAt: { type: Date }
 }, { timestamps: true });
 
 export default mongoose.model('EmailLog', emailLogSchema);

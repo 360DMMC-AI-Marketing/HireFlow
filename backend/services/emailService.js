@@ -167,3 +167,17 @@ export const sendInterviewReminderEmail = async (candidate, interview) => {
 
 // Alias
 export const sendEmail = sendTemplatedEmail;
+
+/**
+ * Trigger 5: Scheduling Link Email
+ * Sends a magic link so the candidate can self-schedule their interview.
+ * Triggered automatically when candidate status changes to "Interview".
+ */
+export const sendSchedulingLinkEmail = async (candidate, job, schedulingLink) => {
+  return sendTemplatedEmail('scheduling_link', candidate.email, {
+    candidate_name: candidate.name,
+    job_title: job.title,
+    scheduling_link: schedulingLink,
+    company_name: 'HireFlow'
+  });
+};

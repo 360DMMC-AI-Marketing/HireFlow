@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { 
   Mail, ChevronRight, CheckCircle2, CalendarDays, ArrowRight, Settings, 
   Video, Phone, MapPin, X, RefreshCw, Loader2, Clock, AlertCircle, 
-  ChevronLeft 
+  ChevronLeft, Activity // <-- Added Activity icon here
 } from "lucide-react";
 import { Card } from "../shared/Card";
 import { getInterviews, cancelInterview } from "../../../services/api/InterviewSettingsPage";
@@ -105,6 +105,16 @@ export const InterviewsView = () => {
           <Settings className="w-4 h-4" />
           Settings
         </button>
+        
+        {/* <-- NEW EMAIL LOGS BUTTON ADDED HERE --> */}
+        <button 
+          onClick={() => navigate('/dashboard/email-activity')}
+          className="bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all flex items-center gap-2"
+        >
+          <Activity className="w-4 h-4" />
+          Email Logs
+        </button>
+
         <button 
           onClick={() => navigate('/dashboard/email-templates')}
           className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2"

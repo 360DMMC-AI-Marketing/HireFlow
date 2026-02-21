@@ -1,8 +1,9 @@
 import 'dotenv/config';
 import mongoose from 'mongoose';
 import { connectToDatabase } from './config/database.js';
-// At the top
+// Workers & background jobs
 import './workers/emailWorker.js'; 
+import './jobs/interviewReminderJob.js';
 import app from './app.js';
 
 

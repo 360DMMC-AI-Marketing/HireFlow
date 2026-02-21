@@ -71,7 +71,7 @@ export const addInterviewFeedback = async (id, data) => {
 // ─── GOOGLE CALENDAR ─────────────────────────────────────────────────────────
 
 export const connectGoogleCalendar = () => {
-  window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/google`;
+  window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/integrations/google`;
 };
 
 // ─── MAGIC LINK GENERATION ───────────────────────────────────────────────────

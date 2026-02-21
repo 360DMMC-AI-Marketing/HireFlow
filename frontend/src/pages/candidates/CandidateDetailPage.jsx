@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '@/utils/axios';
-import { generateMagicLink } from '@/services/api/InterviewSettingsPage';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,12 +14,7 @@ import {
   Download,
   Calendar,
   Briefcase,
-  GraduationCap,
-  ThumbsUp,
-  ThumbsDown,
-  Clock,
-  Check,
-  UserCheck
+  GraduationCap
 } from 'lucide-react';
 import ResumeViewer from '@/components/candidates/ResumeViewer';
 
@@ -29,7 +23,7 @@ const CandidateDetailPage = () => {
   const navigate = useNavigate();
   const [candidate, setCandidate] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(false); // To block buttons while updating
+  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -49,7 +43,7 @@ const CandidateDetailPage = () => {
 
   // --- SMART ACTION HANDLERS ---
 
-  // 1. Schedule Interview -> Generates magic link, updates status, navigates to interview system
+  // 1. Schedule Interview -> Updates status to 'Interview' (Backend automatically generates link & emails it)
   const handleSchedule = async () => {
     const jobId = candidate?.jobId?._id || candidate?.jobId;
     if (!jobId) {
@@ -59,31 +53,17 @@ const CandidateDetailPage = () => {
 
     setActionLoading(true);
     try {
-      // A. Generate magic link via backend
-      const { token, link } = await generateMagicLink(candidate._id, jobId);
-      const magicLink = `${window.location.origin}${link}`;
+      setCandidate(prev => ({ ...prev, status: 'Interview' }));
+      await api.patch(`/candidates/${id}/status`, { status: 'Interview' });
 
-      // B. Update candidate status to 'Interview' if not already further in pipeline
-      if (['New', 'Screening', 'Applied'].includes(candidate.status)) {
-        setCandidate(prev => ({ ...prev, status: 'Interview' }));
-        await api.patch(`/candidates/${id}/status`, { status: 'Interview' });
-      }
-
-      // C. Copy magic link to clipboard
-      try {
-        await navigator.clipboard.writeText(magicLink);
-      } catch (_) { /* clipboard may fail in non-https */ }
-
-      // D. Show success toast with the magic link
-      toast.success("Magic Link Generated!", {
-        description: "Link copied to clipboard. Share it with the candidate so they can pick a time slot.",
-        duration: 6000
+      toast.success("Interview Initiated!", {
+        description: "An email with the scheduling link has been sent directly to the candidate.",
+        duration: 5000
       });
 
-      // E. Navigate to the interview settings page so recruiter can manage slots
       navigate('/dashboard/interviews/settings');
     } catch (error) {
-      const msg = error.response?.data?.message || 'Failed to generate scheduling link';
+      const msg = error.response?.data?.message || 'Failed to initiate scheduling';
       toast.error(msg);
       fetchCandidate(); // Revert optimistic update
     } finally {
@@ -110,13 +90,13 @@ const CandidateDetailPage = () => {
 
   // 3. Hire Candidate -> Sets Status to 'Hired'
   const handleHire = async () => {
-    if (!confirm("Confirm hiring this candidate?")) return;
+    if (!confirm("Confirm hiring this candidate? This will automatically send an offer/hiring email.")) return;
 
     setActionLoading(true);
     try {
       setCandidate(prev => ({ ...prev, status: 'Hired' })); // Optimistic
       await api.patch(`/candidates/${id}/status`, { status: 'Hired' });
-      toast.success("Candidate Hired!", { description: "Congratulations!" });
+      toast.success("Candidate Hired!", { description: "Hiring email sent successfully." });
     } catch (error) {
       toast.error("Failed to hire candidate");
       fetchCandidate(); // Revert
@@ -127,7 +107,6 @@ const CandidateDetailPage = () => {
 
   // 4. Send Generic Email (No status change)
   const handleSendEmail = async () => {
-    // You can hook this up to a modal or a specific backend endpoint later
     toast.info("Email feature coming soon");
   };
 
@@ -326,7 +305,7 @@ const CandidateDetailPage = () => {
           {/* Right Column - Actions & Timeline */}
           <div className="space-y-6">
             
-            {/* --- NEW SMART ACTIONS CARD --- */}
+            {/* --- SMART ACTIONS CARD --- */}
             <Card>
               <CardHeader>
                 <CardTitle>Quick Actions</CardTitle>
@@ -356,112 +335,29 @@ const CandidateDetailPage = () => {
                   Send Email
                 </Button>
 
-                {/* 3. Hire (Hidden if Hired/Rejected) */}
-                {candidate.status !== 'Hired' && candidate.status !== 'Rejected' && (
+                {/* 3. Hire Candidate */}
+                {!['Hired', 'Rejected'].includes(candidate.status) && (
                   <Button 
                     onClick={handleHire}
                     disabled={actionLoading}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-sm"
                   >
-                    <UserCheck className="w-4 h-4 mr-2" />
+                    <Briefcase className="w-4 h-4 mr-2" />
                     Hire Candidate
                   </Button>
                 )}
-
-                {/* 4. Reject (Hidden if Hired/Rejected) */}
-                {candidate.status !== 'Rejected' && candidate.status !== 'Hired' && (
+                
+                {/* 4. Reject Candidate */}
+                {!['Hired', 'Rejected'].includes(candidate.status) && (
                   <Button 
                     onClick={handleReject}
                     disabled={actionLoading}
-                    variant="ghost"
-                    className="w-full text-red-600 hover:bg-red-50 hover:text-red-700 border border-transparent hover:border-red-200"
+                    variant="outline" 
+                    className="w-full text-red-600 hover:bg-red-50 hover:text-red-700 border-red-200"
                   >
-                    <ThumbsDown className="w-4 h-4 mr-2" />
                     Reject Candidate
                   </Button>
                 )}
-
-                {/* Status Feedback */}
-                {candidate.status === 'Hired' && (
-                   <div className="w-full py-3 bg-emerald-50 border border-emerald-100 text-emerald-700 text-center rounded-lg font-medium flex items-center justify-center gap-2">
-                     <Check className="w-5 h-5" /> Candidate Hired
-                   </div>
-                )}
-                
-                {candidate.status === 'Rejected' && (
-                   <div className="w-full py-3 bg-red-50 border border-red-100 text-red-600 text-center rounded-lg font-medium flex items-center justify-center gap-2">
-                     <ThumbsDown className="w-5 h-5" /> Candidate Rejected
-                   </div>
-                )}
-
-              </CardContent>
-            </Card>
-
-            {/* Application Details */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Application Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <p className="text-sm text-slate-500">Position Applied</p>
-                  <p className="font-medium text-slate-900">{candidate.positionApplied || 'N/A'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-slate-500">Source</p>
-                  <p className="font-medium text-slate-900">{candidate.source || 'N/A'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-slate-500">Applied Date</p>
-                  <p className="font-medium text-slate-900">
-                    {new Date(candidate.appliedDate || candidate.createdAt).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Timeline */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="w-5 h-5" />
-                  Timeline
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex gap-3">
-                    <div className="w-2 h-2 rounded-full bg-indigo-600 mt-2"></div>
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">Application Received</p>
-                      <p className="text-xs text-slate-500">
-                        {new Date(candidate.createdAt).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                  {candidate.status === 'Hired' && (
-                    <div className="flex gap-3">
-                      <div className="w-2 h-2 rounded-full bg-emerald-600 mt-2"></div>
-                      <div>
-                        <p className="text-sm font-medium text-slate-900">Hired</p>
-                        <p className="text-xs text-slate-500">Today</p>
-                      </div>
-                    </div>
-                  )}
-                  {candidate.status === 'Rejected' && (
-                    <div className="flex gap-3">
-                      <div className="w-2 h-2 rounded-full bg-red-600 mt-2"></div>
-                      <div>
-                        <p className="text-sm font-medium text-slate-900">Rejected</p>
-                        <p className="text-xs text-slate-500">Today</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
               </CardContent>
             </Card>
           </div>

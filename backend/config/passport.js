@@ -21,7 +21,15 @@ passport.use(new GoogleStrategy({
 
       if (!user) {
         // AUTO-REGISTER if user doesn't exist
-        user = new User({ email, name: profile.displayName });
+        user = new User({ 
+          email, 
+          name: profile.displayName,
+          // Placeholder data to pass Mongoose validation
+          password: 'OAUTH_USER_NO_PASSWORD_REQUIRED', 
+          companyName: 'Setup in progress...',
+          industry: 'Other',
+          companySize: '1-10'
+        });
       }
 
       if (!user.integrations) user.integrations = {};
@@ -59,7 +67,16 @@ passport.use(new LinkedInStrategy({
 
       let user = await User.findOne({ email });
       if (!user) {
-        user = new User({ email, name: profile.displayName || profile.name });
+        // AUTO-REGISTER if user doesn't exist
+        user = new User({ 
+          email, 
+          name: profile.displayName || profile.name,
+          // Placeholder data to pass Mongoose validation
+          password: 'OAUTH_USER_NO_PASSWORD_REQUIRED', 
+          companyName: 'Setup in progress...',
+          industry: 'Other',
+          companySize: '1-10'
+        });
       }
 
       if (!user.integrations) user.integrations = {};
@@ -100,10 +117,15 @@ passport.use('indeed', new OAuth2Strategy({
       let user = await User.findOne({ email });
 
       if (!user) {
-        // Create the user if they don't exist
+        // AUTO-REGISTER if user doesn't exist
         user = new User({ 
             email, 
-            name: "Indeed User" // Indeed's generic strategy doesn't always send a name
+            name: "Indeed User", // Indeed's generic strategy doesn't always send a name
+            // Placeholder data to pass Mongoose validation
+            password: 'OAUTH_USER_NO_PASSWORD_REQUIRED', 
+            companyName: 'Setup in progress...',
+            industry: 'Other',
+            companySize: '1-10'
         });
       }
 

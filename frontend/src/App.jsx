@@ -29,6 +29,10 @@ import SettingsPage from "@/pages/dashboard/settings/SettingsPage";
 import EmailTemplatesPage from "@/pages/dashboard/email-templates/EmailTemplatesPage";
 import EmailActivityPage from "@/pages/dashboard/email-templates/EmailActivityPage";
 
+// ── Phase 3: AI Video Interview pages ──
+import TechCheckPage from './pages/interview/TechCheckPage';
+import LiveInterviewPage from './pages/interview/LiveInterviewPage';
+
 export default function HireFlowDashboard() {
   return (
     <ErrorBoundary>
@@ -39,6 +43,9 @@ export default function HireFlowDashboard() {
         
         {/* Public Interview Scheduling (magic link) */}
         <Route path="/schedule/:token" element={<ScheduleInterview />} />
+        
+        {/* ── Phase 3: Public AI Interview (candidate joins via magic link, no auth) ── */}
+        <Route path="/ai-interview/join/:magicToken" element={<TechCheckPage />} />
         
         {/* Auth Routes */}
         <Route path="/login" element={
@@ -101,6 +108,13 @@ export default function HireFlowDashboard() {
           <Route path="email-templates" element={<EmailTemplatesPage />} />
           <Route path="email-activity" element={<EmailActivityPage />} />
         </Route>
+        
+        {/* ── Phase 3: Protected AI Interview routes (need auth) ── */}
+        <Route path="/ai-interview/live/:sessionId" element={
+          <ProtectedRoute>
+            <LiveInterviewPage />
+          </ProtectedRoute>
+        } />
         
         {/* Default redirect */}
         <Route path="/" element={<Navigate to="/login" replace />} />

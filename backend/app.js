@@ -20,8 +20,12 @@ import emailsRouter from './routes/emails.js';
 import emailTemplatesRouter from './routes/email-templates.js';
 import scheduleRouter from './routes/schedule.js';
 import errorHandler from './middleware/errorHandler.js';
-import session from 'express-session'; // <-- 1. Import this
+import session from 'express-session';
 import dotenv from 'dotenv';
+
+// ── Phase 3: AI Interview route ──
+import aiInterviewRoutes from './routes/aiInterviews.js';
+
 dotenv.config();
 
 const app = express();
@@ -129,6 +133,9 @@ app.use('/api/emails', emailsRouter);
 app.use('/api/email-templates', emailTemplatesRouter);
 app.use('/api/schedule', scheduleRouter);
 
+// ── Phase 3: AI Video Interview endpoints ──
+app.use('/api/v1/ai-interviews', aiInterviewRoutes);
+
 // Health check
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'OK', message: 'Server is running' });
@@ -141,6 +148,5 @@ app.use((req, res) => {
 
 // Error handler middleware (must be last)
 app.use(errorHandler);
-app.use(passport.initialize())
 
 export default app;

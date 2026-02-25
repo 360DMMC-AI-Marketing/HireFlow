@@ -6,7 +6,7 @@ import { useGazeTracking } from '../../hooks/useGazeTracking';
 const LiveInterviewPage = () => {
   const { sessionId } = useParams();
   const navigate = useNavigate();
-  const token = localStorage.getItem('token');
+ const token = localStorage.getItem('token') || sessionStorage.getItem('interviewToken');
   const videoRef = useRef(null);
   const [stream, setStream] = useState(null);
   const [elapsed, setElapsed] = useState(0);

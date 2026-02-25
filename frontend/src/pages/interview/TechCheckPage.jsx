@@ -17,12 +17,18 @@ const TechCheckPage = () => {
     browser:    { status: 'pending', msg: 'Testing...' }
   });
 
-  // Fetch session info
+  // Fetch session info + temp token
   useEffect(() => {
     (async () => {
       try {
         const { data } = await axios.get(`${API}/v1/ai-interviews/join/${magicToken}`);
         setSessionInfo(data.data);
+
+        // ✅ Store the temporary interview token
+        if (data.data.token) {
+          sessionStorage.setItem('interviewToken', data.data.token);
+          sessionStorage.setItem('interviewSessionId', data.data.sessionId);
+        }
       } catch {
         setSessionInfo({ error: 'Invalid or expired interview link.' });
       }
@@ -52,10 +58,12 @@ const TechCheckPage = () => {
           camera: { status: 'passed', msg: 'Camera working' },
           microphone: { status: 'passed', msg: 'Microphone detected' }
         }));
+        // Stop tracks after check so they can be re-acquired on the live page
+        // Actually keep them for preview, cleanup on unmount
       } catch {
         setChecks(p => ({
           ...p,
-          camera: { status: 'failed', msg: 'Camera access denied' },
+          camera: { status: 'failed', msg: 'Camera access denied — please allow permissions' },
           microphone: { status: 'failed', msg: 'Microphone access denied' }
         }));
       }
@@ -69,13 +77,20 @@ const TechCheckPage = () => {
           ...p,
           internet: {
             status: ms < 500 ? 'passed' : ms < 1000 ? 'warning' : 'failed',
-            msg: ms < 500 ? `Good (${ms}ms)` : `Slow (${ms}ms)`
+            msg: ms < 500 ? `Good connection (${ms}ms)` : `Slow connection (${ms}ms)`
           }
         }));
       } catch {
-        setChecks(p => ({ ...p, internet: { status: 'failed', msg: 'No connection' } }));
+        setChecks(p => ({ ...p, internet: { status: 'failed', msg: 'No connection detected' } }));
       }
     })();
+
+    // Cleanup camera on unmount
+    return () => {
+      if (videoRef.current?.srcObject) {
+        videoRef.current.srcObject.getTracks().forEach(t => t.stop());
+      }
+    };
   }, []);
 
   const allOk = Object.values(checks).every(c => c.status !== 'failed' && c.status !== 'pending');
@@ -84,8 +99,10 @@ const TechCheckPage = () => {
   if (sessionInfo?.error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="bg-white rounded-xl shadow p-8 text-center">
-          <p className="text-red-500 text-lg font-medium">{sessionInfo.error}</p>
+        <div className="bg-white rounded-xl shadow p-8 text-center max-w-md">
+          <div className="text-4xl mb-4">🔗</div>
+          <p className="text-red-600 text-lg font-semibold">{sessionInfo.error}</p>
+          <p className="text-gray-500 text-sm mt-2">Please contact the recruiter for a new link.</p>
         </div>
       </div>
     );
@@ -96,10 +113,15 @@ const TechCheckPage = () => {
       <div className="bg-white rounded-2xl shadow-lg p-8 max-w-lg w-full">
         <h1 className="text-2xl font-bold mb-1">Pre-Interview Tech Check</h1>
         {sessionInfo && (
-          <p className="text-gray-500 mb-6 text-sm">
-            <strong>{sessionInfo.jobTitle}</strong> — {sessionInfo.totalQuestions} questions,
-            ~{sessionInfo.estimatedDuration} min
-          </p>
+          <>
+            <p className="text-gray-500 mb-1 text-sm">
+              <strong>{sessionInfo.jobTitle}</strong> — {sessionInfo.totalQuestions} questions,
+              ~{sessionInfo.estimatedDuration} min
+            </p>
+            {sessionInfo.candidateName && (
+              <p className="text-gray-400 mb-4 text-sm">Welcome, {sessionInfo.candidateName}</p>
+            )}
+          </>
         )}
 
         <div className="bg-gray-900 rounded-xl overflow-hidden mb-6 aspect-video">
@@ -120,10 +142,10 @@ const TechCheckPage = () => {
 
         <button
           onClick={() => navigate(`/ai-interview/live/${sessionInfo.sessionId}`)}
-          disabled={!allOk}
+          disabled={!allOk || !sessionInfo}
           className="w-full py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-50 transition"
         >
-          {allOk ? 'Start Interview' : 'Fix issues above to continue'}
+          {allOk ? 'Continue to Interview' : 'Fix issues above to continue'}
         </button>
       </div>
     </div>

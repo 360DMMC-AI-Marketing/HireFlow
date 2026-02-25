@@ -28,7 +28,7 @@ router.get('/:id',
   ctrl.getSession
 );
 router.delete('/:id',
-  authorize('admin'),
+  authorize('admin', 'recruiter'),
   ctrl.deleteSession
 );
 
@@ -64,10 +64,6 @@ router.post('/questions/bank',
 router.put('/questions/bank/:questionId',
   authorize('admin', 'recruiter'),
   ctrl.updateQuestion
-);
-router.delete('/questions/bank/:questionId',
-  authorize('admin', 'recruiter'),
-  ctrl.deleteQuestion
 );
 
 export default router;

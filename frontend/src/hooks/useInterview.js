@@ -1,11 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { io } from 'socket.io-client';
 
-/**
- * Manages the full interview lifecycle over Socket.io.
- * Handles: socket connection, state transitions, TTS playback,
- * mic audio streaming to server, and live transcript updates.
- */
 export function useInterview(sessionId, token) {
   const [state, setState] = useState('idle');
   const [questionIndex, setQuestionIndex] = useState(0);
@@ -16,46 +11,61 @@ export function useInterview(sessionId, token) {
   const [error, setError] = useState(null);
 
   const socketRef = useRef(null);
-  const audioCtxRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const processorRef = useRef(null);
 
   useEffect(() => {
-    // Socket.io connects to the raw server host, NOT the /api path
-    // VITE_API_URL = http://localhost:5000/api  →  we need http://localhost:5000
-    const rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-    const serverHost = rawApiUrl.replace(/\/api\/?$/, ''); // strips trailing /api
-
-    const socket = io(`${serverHost}/interview`, {
+    const API = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+    const socket = io(`${API}/interview`, {
       auth: { token },
       transports: ['websocket']
     });
 
     socket.on('connect', () => {
+      console.log('[Socket] Connected');
       setIsConnected(true);
       socket.emit('join-interview', { sessionId });
     });
     socket.on('disconnect', () => setIsConnected(false));
+    socket.on('connect_error', (err) => {
+      console.error('[Socket] Connection error:', err.message);
+      setError('Connection failed: ' + err.message);
+    });
 
     // ── State changes ──
     socket.on('interview-state', ({ state: s, questionIndex: qi, totalQuestions: tq, questionText: qt }) => {
+      console.log('[Interview] State:', s, qi !== undefined ? `Q${qi + 1}` : '');
       setState(s);
       if (qi !== undefined) setQuestionIndex(qi);
       if (tq !== undefined) setTotalQuestions(tq);
       if (qt) { setCurrentQuestion(qt); setTranscript(''); }
     });
 
-    // ── TTS audio playback ──
-    const audioQueue = [];
-    let isPlaying = false;
+    // ── TTS audio playback (complete audio, not chunks) ──
+    socket.on('tts-audio', async ({ audio }) => {
+      try {
+        console.log('[TTS] Received audio, playing...');
+        const bytes = Uint8Array.from(atob(audio), c => c.charCodeAt(0));
+        const blob = new Blob([bytes], { type: 'audio/mpeg' });
+        const url = URL.createObjectURL(blob);
+        const player = new Audio(url);
 
-    socket.on('tts-audio-chunk', async ({ audio, isLast }) => {
-      if (audio) {
-        audioQueue.push(Uint8Array.from(atob(audio), c => c.charCodeAt(0)));
-      }
-      if (!isPlaying && audioQueue.length > 0) {
-        isPlaying = true;
-        await playQueue(audioQueue, () => { isPlaying = false; });
+        player.onended = () => {
+          console.log('[TTS] Playback finished');
+          URL.revokeObjectURL(url);
+          socket.emit('tts-playback-done');
+        };
+
+        player.onerror = (e) => {
+          console.error('[TTS] Playback error:', e);
+          URL.revokeObjectURL(url);
+          socket.emit('tts-playback-done'); // still signal done so flow continues
+        };
+
+        await player.play();
+      } catch (e) {
+        console.error('[TTS] Play failed:', e);
+        socket.emit('tts-playback-done');
       }
     });
 
@@ -65,35 +75,26 @@ export function useInterview(sessionId, token) {
     });
 
     // ── Server says: start sending mic audio ──
-    socket.on('start-sending-audio', () => startMicCapture(socket));
+    socket.on('start-sending-audio', () => {
+      console.log('[Mic] Server requested audio stream');
+      startMicCapture(socket);
+    });
+
+    // ── Prompts ──
+    socket.on('interview-prompt', ({ message }) => {
+      console.log('[Interview] Prompt:', message);
+    });
 
     // ── Interview done ──
     socket.on('interview-complete', () => { stopMicCapture(); setState('done'); });
-    socket.on('interview-error', ({ message }) => setError(message));
+    socket.on('interview-error', ({ message }) => {
+      console.error('[Interview] Error:', message);
+      setError(message);
+    });
 
     socketRef.current = socket;
     return () => { stopMicCapture(); socket.disconnect(); };
   }, [sessionId, token]);
-
-  // ── Audio playback helper ──
-  async function playQueue(queue, onDone) {
-    if (!audioCtxRef.current) {
-      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    const ctx = audioCtxRef.current;
-    while (queue.length > 0) {
-      const chunk = queue.shift();
-      try {
-        const buf = await ctx.decodeAudioData(chunk.buffer.slice(0));
-        const src = ctx.createBufferSource();
-        src.buffer = buf;
-        src.connect(ctx.destination);
-        src.start();
-        await new Promise(r => { src.onended = r; });
-      } catch (e) { console.error('[Audio] Playback error:', e); }
-    }
-    onDone();
-  }
 
   // ── Mic capture → server ──
   async function startMicCapture(socket) {
@@ -119,6 +120,7 @@ export function useInterview(sessionId, token) {
 
       source.connect(processor);
       processor.connect(actx.destination);
+      console.log('[Mic] Capturing audio');
     } catch (e) {
       console.error('[Mic] Error:', e);
       setError('Microphone access failed');

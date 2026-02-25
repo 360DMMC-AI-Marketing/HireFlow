@@ -32,40 +32,45 @@ import EmailActivityPage from "@/pages/dashboard/email-templates/EmailActivityPa
 // ── Phase 3: AI Video Interview pages ──
 import TechCheckPage from './pages/interview/TechCheckPage';
 import LiveInterviewPage from './pages/interview/LiveInterviewPage';
+import InterviewCompletePage from './pages/interview/InterviewCompletePage';
 
 export default function HireFlowDashboard() {
   return (
     <ErrorBoundary>
       <Toaster position="top-center" richColors />
       <Routes>
-        {/* Public Job Application Route */}
+        {/* ── Public Routes (no auth required) ── */}
+
+        {/* Job application form */}
         <Route path="/apply/:jobId" element={<JobApplicationPage />} />
-        
-        {/* Public Interview Scheduling (magic link) */}
+
+        {/* Human interview scheduling (magic link) */}
         <Route path="/schedule/:token" element={<ScheduleInterview />} />
-        
-        {/* ── Phase 3: Public AI Interview (candidate joins via magic link, no auth) ── */}
+
+        {/* AI Interview candidate flow (magic link → tech check → live → complete) */}
         <Route path="/ai-interview/join/:magicToken" element={<TechCheckPage />} />
-        
-        {/* Auth Routes */}
+        <Route path="/ai-interview/live/:sessionId" element={<LiveInterviewPage />} />
+        <Route path="/ai-interview/complete/:sessionId" element={<InterviewCompletePage />} />
+
+        {/* ── Auth Routes ── */}
         <Route path="/login" element={
           <AuthLayout title="Platform Login" subtitle="Secure access to your recruitment command center.">
             <LoginPage />
           </AuthLayout>
         } />
-        
+
         <Route path="/signup" element={
           <AuthLayout title="Register Company" subtitle="Join 500+ enterprises optimizing their talent acquisition.">
             <SignupPage />
           </AuthLayout>
         } />
-        
+
         <Route path="/verify-email" element={
           <AuthLayout title="" subtitle="">
             <EmailVerificationView />
           </AuthLayout>
         } />
-        
+
         <Route path="/forgot-password" element={
           <AuthLayout title="Reset Password" subtitle="Enter your email to receive reset instructions.">
             <ForgotPasswordPage />
@@ -77,46 +82,37 @@ export default function HireFlowDashboard() {
             <ResetPasswordPage />
           </AuthLayout>
         } />
-        
-        {/* Dashboard Routes */}
+
+        {/* ── Protected Dashboard Routes ── */}
         <Route path="/dashboard" element={
           <ProtectedRoute>
             <DashboardLayout />
           </ProtectedRoute>
         }>
           <Route index element={<OverviewView />} />
-          
+
           <Route path="jobs" element={<JobsView />} />
           <Route path="jobs/create" element={<CreateJob />} />
           <Route path="jobs/:id" element={<JobDetail />} />
           <Route path="jobs/:id/edit" element={<CreateJob />} />
-          
+
           <Route path="candidates" element={<CandidatesView />} />
           <Route path="candidates/add" element={<AddCandidatePage />} />
           <Route path="candidates/:id" element={<CandidateDetailPage />} />
-          
-          {/* Interview Routes */}
+
           <Route path="interviews" element={<InterviewsView />} />
           <Route path="interviews/settings" element={<InterviewSettingsPage />} />
-          
+
           <Route path="ai-video" element={<AIVideoView />} />
           <Route path="analytics" element={<AnalyticsView analyticsData={ANALYTICS_DATA} />} />
           <Route path="profile" element={<UserProfile />} />
           <Route path="settings" element={<SettingsPage />} />
-          
-          {/* Email Templates */}
+
           <Route path="email-templates" element={<EmailTemplatesPage />} />
           <Route path="email-activity" element={<EmailActivityPage />} />
         </Route>
-        
-        {/* ── Phase 3: Protected AI Interview routes (need auth) ── */}
-        <Route path="/ai-interview/live/:sessionId" element={
-          <ProtectedRoute>
-            <LiveInterviewPage />
-          </ProtectedRoute>
-        } />
-        
-        {/* Default redirect */}
+
+        {/* ── Default redirect ── */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

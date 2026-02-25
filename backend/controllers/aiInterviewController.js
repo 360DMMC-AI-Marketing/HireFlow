@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import jwt from 'jsonwebtoken';
 import AIInterviewSession from '../models/AIInterviewSession.js';
 import QuestionBank from '../models/QuestionBank.js';
 
@@ -112,8 +113,17 @@ export const getSessionsByCandidate = async (req, res) => {
  */
 export const deleteSession = async (req, res) => {
   try {
-    const session = await AIInterviewSession.findByIdAndDelete(req.params.id);
+    const session = await AIInterviewSession.findById(req.params.id);
     if (!session) return res.status(404).json({ success: false, message: 'Not found' });
+
+    // If in-progress, cancel it first (cleanup)
+    if (session.status === 'in-progress') {
+      session.status = 'cancelled';
+      session.completedAt = new Date();
+      await session.save();
+    }
+
+    await AIInterviewSession.findByIdAndDelete(req.params.id);
     res.json({ success: true, message: 'Session deleted' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -149,20 +159,34 @@ export const joinViaMagicToken = async (req, res) => {
     const session = await AIInterviewSession.findOne({
       magicToken: req.params.magicToken,
       expiresAt: { $gt: new Date() }
-    }).populate('jobId', 'title');
+    }).populate('jobId', 'title').populate('candidateId', 'name email');
 
     if (!session) {
       return res.status(404).json({ success: false, message: 'Invalid or expired link' });
     }
+
+    // Generate a temporary JWT for the candidate (valid 2 hours)
+    const tempToken = jwt.sign(
+      {
+        id: session.candidateId._id,
+        role: 'candidate',
+        sessionId: session._id,
+        isInterviewToken: true
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '2h' }
+    );
 
     res.json({
       success: true,
       data: {
         sessionId: session._id,
         jobTitle: session.jobId?.title,
+        candidateName: session.candidateId?.name,
         totalQuestions: session.questions.length,
         estimatedDuration: session.questions.length * 2,
-        status: session.status
+        status: session.status,
+        token: tempToken  // ← candidate uses this for socket auth
       }
     });
   } catch (err) {

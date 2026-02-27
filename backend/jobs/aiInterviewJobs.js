@@ -18,17 +18,14 @@ const worker = new Worker('ai-interview-analysis', async (job) => {
   const { sessionId } = job.data;
   console.log(`[AI Job] Analyzing interview: ${sessionId}`);
 
-  // 1. Calculate attention scores from raw data
   await calculateOverallAttention(sessionId);
-
-  // 2. Run Gemini analysis (per-question + overall + resume comparison)
   await analyzeInterview(sessionId);
 
   console.log(`[AI Job] Analysis complete: ${sessionId}`);
 }, {
   connection,
-  concurrency: 2,
-  limiter: { max: 5, duration: 60000 }
+  concurrency: 1,              // only 1 at a time to avoid rate limits
+  limiter: { max: 2, duration: 60000 }  // max 2 per minute
 });
 
 worker.on('completed', (job) =>

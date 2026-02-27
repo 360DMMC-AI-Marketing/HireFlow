@@ -4,69 +4,77 @@ const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
 
 /**
  * Create a live Deepgram transcription session.
+ * Returns a Promise that resolves ONLY when the WebSocket is open and ready.
+ *
+ * Previous version returned synchronously — audio sent before the connection
+ * was ready got silently dropped, causing later questions to have no transcript.
  *
  * @param {Object} callbacks
- * @param {function} callbacks.onTranscript - Called with each transcript result:
- *   { text, isFinal, confidence, words, speechFinal, utteranceEnd }
- * @param {function} callbacks.onError - Called on connection errors
- * @param {function} callbacks.onClose - Called when Deepgram connection closes
- * @returns {{ send(audioBuffer), close() }}
+ * @param {function} callbacks.onTranscript
+ * @param {function} callbacks.onError
+ * @param {function} callbacks.onClose
+ * @returns {Promise<{ send(buffer), close() }>}
  */
 export function createLiveTranscription({ onTranscript, onError, onClose }) {
-  const connection = deepgram.listen.live({
-    model: 'nova-2',           // best accuracy
-    language: 'en',
-    smart_format: true,        // auto-punctuation and capitalization
-    interim_results: true,     // show words as candidate speaks (before finalized)
-    utterance_end_ms: 1500,    // consider utterance done after 1.5s silence
-    vad_events: true,          // voice activity detection events
-    endpointing: 300,          // ms sensitivity for detecting speech end
-    encoding: 'linear16',      // raw PCM from browser mic
-    sample_rate: 16000,
-    channels: 1
-  });
+  return new Promise((resolve, reject) => {
+    const connection = deepgram.listen.live({
+      model: 'nova-2',
+      language: 'en',
+      smart_format: true,
+      interim_results: true,
+      utterance_end_ms: 1200,
+      vad_events: true,
+      endpointing: 300,
+      encoding: 'linear16',
+      sample_rate: 16000,
+      channels: 1
+    });
 
-  connection.on(LiveTranscriptionEvents.Open, () => {
-    console.log('[Deepgram] Connection opened');
-  });
+    const timeoutId = setTimeout(() => {
+      console.error('[Deepgram] Connection timeout (10s)');
+      reject(new Error('Deepgram connection timeout'));
+    }, 10000);
 
-  connection.on(LiveTranscriptionEvents.Transcript, (data) => {
-    const alt = data.channel.alternatives[0];
-    if (alt.transcript) {
-      onTranscript({
-        text: alt.transcript,
-        isFinal: data.is_final,          // true = these words are locked in
-        confidence: alt.confidence,
-        words: alt.words,                 // word-level timestamps
-        speechFinal: data.speech_final    // true = end of full sentence/thought
+    connection.on(LiveTranscriptionEvents.Open, () => {
+      clearTimeout(timeoutId);
+      console.log('[Deepgram] Connection opened and ready');
+      resolve({
+        send(audioBuffer) {
+          if (connection.getReadyState() === 1) {
+            connection.send(audioBuffer);
+          }
+        },
+        close() {
+          try { connection.requestClose(); } catch (e) { /* ignore */ }
+        }
       });
-    }
-  });
+    });
 
-  connection.on(LiveTranscriptionEvents.UtteranceEnd, () => {
-    onTranscript({ utteranceEnd: true });  // candidate stopped talking
-  });
-
-  connection.on(LiveTranscriptionEvents.Error, (err) => {
-    console.error('[Deepgram] Error:', err);
-    if (onError) onError(err);
-  });
-
-  connection.on(LiveTranscriptionEvents.Close, () => {
-    console.log('[Deepgram] Connection closed');
-    if (onClose) onClose();
-  });
-
-  return {
-    /** Pipe raw PCM audio to Deepgram */
-    send(audioBuffer) {
-      if (connection.getReadyState() === 1) {
-        connection.send(audioBuffer);
+    connection.on(LiveTranscriptionEvents.Transcript, (data) => {
+      const alt = data.channel?.alternatives?.[0];
+      if (alt?.transcript) {
+        onTranscript({
+          text: alt.transcript,
+          isFinal: data.is_final,
+          confidence: alt.confidence,
+          words: alt.words,
+          speechFinal: data.speech_final
+        });
       }
-    },
-    /** Gracefully close the connection */
-    close() {
-      connection.requestClose();
-    }
-  };
+    });
+
+    connection.on(LiveTranscriptionEvents.UtteranceEnd, () => {
+      onTranscript({ utteranceEnd: true });
+    });
+
+    connection.on(LiveTranscriptionEvents.Error, (err) => {
+      console.error('[Deepgram] Error:', err);
+      if (onError) onError(err);
+    });
+
+    connection.on(LiveTranscriptionEvents.Close, () => {
+      console.log('[Deepgram] Connection closed');
+      if (onClose) onClose();
+    });
+  });
 }

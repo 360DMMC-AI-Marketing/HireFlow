@@ -2,42 +2,84 @@ import React, { useRef, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useInterview } from '../../hooks/useInterview';
 import { useGazeTracking } from '../../hooks/useGazeTracking';
+import { useMediaRecorder } from '../../hooks/useMediaRecorder';
 
 const LiveInterviewPage = () => {
   const { sessionId } = useParams();
   const navigate = useNavigate();
- const token = localStorage.getItem('token') || sessionStorage.getItem('interviewToken');
+  const token = localStorage.getItem('token') || sessionStorage.getItem('interviewToken');
   const videoRef = useRef(null);
   const [stream, setStream] = useState(null);
   const [elapsed, setElapsed] = useState(0);
 
-  // ── Camera ──
-  useEffect(() => {
-    (async () => {
-      try {
-        const s = await navigator.mediaDevices.getUserMedia({
-          video: { width: 1280, height: 720, facingMode: 'user' },
-          audio: true
-        });
-        setStream(s);
-        if (videoRef.current) videoRef.current.srcObject = s;
-      } catch (e) { console.error('Camera denied:', e); }
-    })();
-    return () => stream?.getTracks().forEach(t => t.stop());
-  }, []);
+  // ═══════════════════════════════════════════════════
+  // HOOKS — must all be called in consistent order
+  // ═══════════════════════════════════════════════════
 
-  // ── Interview hook ──
+  const { isRecording, isUploading, uploadProgress, startRecording, stopRecording, uploadRecording } = useMediaRecorder();
+
   const {
     state, questionIndex, totalQuestions, currentQuestion,
     transcript, isConnected, error,
     startInterview, endInterview, sendAttentionData
   } = useInterview(sessionId, token);
 
-  // ── Gaze tracking hook ──
-  const { gazeScore, confidence, fps, isLoading, flushAttentionBuffer } =
-    useGazeTracking(videoRef, state === 'listening' || state === 'asking');
+  // Track gaze during ALL active states, not just listening/asking
+  const interviewActive = ['greeting', 'asking', 'listening', 'processing', 'closing'].includes(state);
 
-  // ── Flush attention data every 5s ──
+  const { gazeScore, confidence, fps, isLoading, flushAttentionBuffer } =
+    useGazeTracking(videoRef, interviewActive);
+
+  // ═══════════════════════════════════════════════════
+  // EFFECTS
+  // ═══════════════════════════════════════════════════
+
+  // ── Camera: get video + audio stream ──
+  // Audio included so recording captures both video and voice.
+  // <video> element is muted so candidate doesn't hear echo.
+  // useInterview creates a SEPARATE 16kHz audio stream for Deepgram.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({
+          video: { width: 1280, height: 720, facingMode: 'user' },
+          audio: true
+        });
+        if (cancelled) {
+          s.getTracks().forEach(t => t.stop());
+          return;
+        }
+        console.log('[Camera] Stream ready:', s.getTracks().map(t => t.kind).join(', '));
+        setStream(s);
+        if (videoRef.current) videoRef.current.srcObject = s;
+      } catch (e) {
+        console.error('[Camera] Denied:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      setStream(prev => {
+        if (prev) prev.getTracks().forEach(t => t.stop());
+        return null;
+      });
+    };
+  }, []);
+
+  // ── Recording: start when interview active + stream ready ──
+  useEffect(() => {
+    if (interviewActive && stream && !isRecording) {
+      startRecording(stream);
+    }
+    if (state === 'done' && isRecording) {
+      (async () => {
+        const blob = await stopRecording();
+        if (blob) await uploadRecording(sessionId, blob, token);
+      })();
+    }
+  }, [state, stream, isRecording, interviewActive]);
+
+  // ── Flush gaze data to server every 5s ──
   useEffect(() => {
     const iv = setInterval(() => {
       const data = flushAttentionBuffer();
@@ -48,22 +90,24 @@ const LiveInterviewPage = () => {
 
   // ── Timer ──
   useEffect(() => {
-    const active = ['greeting', 'asking', 'listening', 'processing'].includes(state);
-    if (!active) return;
+    if (!interviewActive) return;
     const iv = setInterval(() => setElapsed(p => p + 1), 1000);
     return () => clearInterval(iv);
-  }, [state]);
+  }, [interviewActive]);
 
-  // ── Redirect when done ──
+  // ── Redirect when done (after upload finishes) ──
   useEffect(() => {
-    if (state === 'done') {
-      setTimeout(() => navigate(`/ai-interview/complete/${sessionId}`), 2000);
+    if (state === 'done' && !isUploading && !isRecording) {
+      const timer = setTimeout(() => navigate(`/ai-interview/complete/${sessionId}`), 3000);
+      return () => clearTimeout(timer);
     }
-  }, [state, sessionId, navigate]);
+  }, [state, isUploading, isRecording, sessionId, navigate]);
+
+  // ═══════════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════════
 
   const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-
-  // ── Gaze change indicator (compare to average) ──
   const gazeChange = gazeScore > 85 ? 12 : gazeScore > 60 ? 5 : -8;
 
   return (
@@ -79,15 +123,17 @@ const LiveInterviewPage = () => {
             <h1 className="text-2xl font-bold text-gray-900">AI Video Assessment</h1>
             <p className="text-gray-500 text-sm">Automated interview insights with gaze tracking</p>
           </div>
-          <button
-            onClick={endInterview}
-            className="flex items-center gap-2 px-5 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth="2" />
-            </svg>
-            End Session
-          </button>
+          {!['idle', 'done'].includes(state) && (
+            <button
+              onClick={endInterview}
+              className="flex items-center gap-2 px-5 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth="2" />
+              </svg>
+              End Session
+            </button>
+          )}
         </div>
       </div>
 
@@ -97,19 +143,20 @@ const LiveInterviewPage = () => {
         {/* ── LEFT: Video + Question ── */}
         <div className="flex-1">
           <div className="bg-gray-900 rounded-2xl overflow-hidden relative">
-            {/* REC badge */}
+            {/* Status badges */}
             <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
-              {state !== 'idle' && (
+              {state !== 'idle' && state !== 'done' && (
                 <div className="flex items-center gap-2 bg-gray-800/80 backdrop-blur px-3 py-1.5 rounded-full">
                   <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                  <span className="text-red-400 text-xs font-semibold tracking-wide">REC</span>
+                  <span className="text-red-400 text-xs font-semibold tracking-wide">LIVE</span>
                 </div>
               )}
-              <button className="text-gray-400 hover:text-white transition p-1">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              {isRecording && (
+                <div className="flex items-center gap-2 bg-gray-800/80 backdrop-blur px-3 py-1.5 rounded-full">
+                  <span className="w-2 h-2 bg-red-400 rounded-full animate-pulse" />
+                  <span className="text-gray-300 text-xs font-semibold">REC</span>
+                </div>
+              )}
             </div>
 
             {/* Video */}
@@ -124,7 +171,7 @@ const LiveInterviewPage = () => {
                   <svg className="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <rect x="2" y="4" width="20" height="16" rx="2" strokeWidth="1.5" />
                   </svg>
-                  <p>Video Feed Will Appear Here</p>
+                  <p>Camera loading...</p>
                 </div>
               )}
             </div>
@@ -152,7 +199,6 @@ const LiveInterviewPage = () => {
           {/* Question + Transcript */}
           {currentQuestion && (
             <div className="mt-4 bg-white rounded-xl p-5 shadow-sm">
-              {/* Progress bar */}
               <div className="flex items-center gap-3 mb-3">
                 <span className="text-sm font-medium text-gray-600">
                   Question {questionIndex + 1} of {totalQuestions}
@@ -166,7 +212,6 @@ const LiveInterviewPage = () => {
               </div>
               <p className="font-medium text-gray-800">{currentQuestion}</p>
 
-              {/* Transcript */}
               {(state === 'listening' || transcript) && (
                 <div className="mt-3 border-t pt-3">
                   <div className="flex items-center gap-2 mb-2">
@@ -196,6 +241,26 @@ const LiveInterviewPage = () => {
               >
                 {!isConnected ? 'Connecting...' : isLoading ? 'Loading AI...' : 'Start Interview'}
               </button>
+            </div>
+          )}
+
+          {/* Done state */}
+          {state === 'done' && (
+            <div className="mt-4 bg-green-50 rounded-xl p-6 text-center border border-green-200">
+              <svg className="w-10 h-10 text-green-500 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <p className="text-green-800 font-bold text-lg">Interview Complete!</p>
+              {isUploading ? (
+                <div className="mt-3">
+                  <p className="text-green-600 text-sm">Uploading recording... {uploadProgress}%</p>
+                  <div className="w-full max-w-xs mx-auto bg-green-200 rounded-full h-2 mt-2">
+                    <div className="bg-green-600 rounded-full h-2 transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                  </div>
+                </div>
+              ) : (
+                <p className="text-green-600 text-sm mt-1">Redirecting...</p>
+              )}
             </div>
           )}
 
@@ -283,6 +348,15 @@ const LiveInterviewPage = () => {
                   <p className="font-semibold text-sm text-green-700">Clear Communication</p>
                   <p className="text-xs text-gray-600 mt-1">
                     Speech clarity and pacing are excellent, showing confidence.
+                  </p>
+                </div>
+              )}
+
+              {state === 'idle' && (
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <p className="font-semibold text-sm text-gray-600">Ready</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Insights will appear once the interview begins.
                   </p>
                 </div>
               )}

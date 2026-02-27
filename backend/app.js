@@ -22,6 +22,8 @@ import scheduleRouter from './routes/schedule.js';
 import errorHandler from './middleware/errorHandler.js';
 import session from 'express-session';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 // ── Phase 3: AI Interview route ──
 import aiInterviewRoutes from './routes/aiInterviews.js';
@@ -114,6 +116,13 @@ app.use(passport.session());
 // }));
 
 // ============================================================
+// 📁 STATIC FILE SERVING (interview recordings)
+// ============================================================
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use('/uploads', express.static(path.join(__dirname, 'assets', 'uploads')));
+
+// ============================================================
 // 🛣️ ROUTES
 // ============================================================
 
@@ -135,7 +144,7 @@ app.use('/api/schedule', scheduleRouter);
 
 // ── Phase 3: AI Video Interview endpoints ──
 app.use('/api/v1/ai-interviews', aiInterviewRoutes);
-
+app.use('/api/ai-interviews', aiInterviewRoutes);  
 // Health check
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'OK', message: 'Server is running' });

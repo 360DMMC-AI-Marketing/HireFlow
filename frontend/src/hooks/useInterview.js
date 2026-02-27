@@ -13,6 +13,30 @@ export function useInterview(sessionId, token) {
   const socketRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const processorRef = useRef(null);
+  const sourceRef = useRef(null);
+
+  // ── Stop mic — must be defined before useEffect that references it ──
+  const stopMicCapture = useCallback(() => {
+    // Disconnect audio processing graph
+    if (sourceRef.current) {
+      try { sourceRef.current.disconnect(); } catch (e) { /* ignore */ }
+      sourceRef.current = null;
+    }
+    if (processorRef.current) {
+      try {
+        processorRef.current.processor.disconnect();
+        if (processorRef.current.actx.state !== 'closed') {
+          processorRef.current.actx.close();
+        }
+      } catch (e) { /* ignore */ }
+      processorRef.current = null;
+    }
+    // Release mic
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(t => t.stop());
+      mediaStreamRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     const API = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
@@ -41,7 +65,7 @@ export function useInterview(sessionId, token) {
       if (qt) { setCurrentQuestion(qt); setTranscript(''); }
     });
 
-    // ── TTS audio playback (complete audio, not chunks) ──
+    // ── TTS playback ──
     socket.on('tts-audio', async ({ audio }) => {
       try {
         console.log('[TTS] Received audio, playing...');
@@ -55,11 +79,10 @@ export function useInterview(sessionId, token) {
           URL.revokeObjectURL(url);
           socket.emit('tts-playback-done');
         };
-
         player.onerror = (e) => {
           console.error('[TTS] Playback error:', e);
           URL.revokeObjectURL(url);
-          socket.emit('tts-playback-done'); // still signal done so flow continues
+          socket.emit('tts-playback-done');
         };
 
         await player.play();
@@ -75,8 +98,10 @@ export function useInterview(sessionId, token) {
     });
 
     // ── Server says: start sending mic audio ──
+    // CRITICAL: kill previous mic FIRST to prevent overlapping AudioContexts
     socket.on('start-sending-audio', () => {
       console.log('[Mic] Server requested audio stream');
+      stopMicCapture();
       startMicCapture(socket);
     });
 
@@ -85,8 +110,11 @@ export function useInterview(sessionId, token) {
       console.log('[Interview] Prompt:', message);
     });
 
-    // ── Interview done ──
-    socket.on('interview-complete', () => { stopMicCapture(); setState('done'); });
+    // ── Done ──
+    socket.on('interview-complete', () => {
+      stopMicCapture();
+      setState('done');
+    });
     socket.on('interview-error', ({ message }) => {
       console.error('[Interview] Error:', message);
       setError(message);
@@ -94,9 +122,9 @@ export function useInterview(sessionId, token) {
 
     socketRef.current = socket;
     return () => { stopMicCapture(); socket.disconnect(); };
-  }, [sessionId, token]);
+  }, [sessionId, token, stopMicCapture]);
 
-  // ── Mic capture → server ──
+  // ── Mic capture → PCM → server ──
   async function startMicCapture(socket) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -107,6 +135,8 @@ export function useInterview(sessionId, token) {
       const actx = new AudioContext({ sampleRate: 16000 });
       const source = actx.createMediaStreamSource(stream);
       const processor = actx.createScriptProcessor(4096, 1, 1);
+
+      sourceRef.current = source;
       processorRef.current = { processor, actx };
 
       processor.onaudioprocess = (e) => {
@@ -127,21 +157,13 @@ export function useInterview(sessionId, token) {
     }
   }
 
-  function stopMicCapture() {
-    mediaStreamRef.current?.getTracks().forEach(t => t.stop());
-    if (processorRef.current) {
-      processorRef.current.processor.disconnect();
-      processorRef.current.actx.close();
-    }
-  }
-
   const startInterview = useCallback(() =>
     socketRef.current?.emit('start-interview', { sessionId }), [sessionId]);
 
   const endInterview = useCallback(() => {
     socketRef.current?.emit('end-interview', { sessionId });
     stopMicCapture();
-  }, [sessionId]);
+  }, [sessionId, stopMicCapture]);
 
   const sendAttentionData = useCallback((dataPoints) =>
     socketRef.current?.emit('attention-data', { sessionId, dataPoints }), [sessionId]);

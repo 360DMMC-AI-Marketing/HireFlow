@@ -1,38 +1,64 @@
 // backend/services/aiAnalysisService.js
 // ─────────────────────────────────────────────────────────────
-// Uses Google Gemini API (free tier) for interview analysis.
-// Replaces the Anthropic/Claude version.
+// Uses Groq API (free tier) for interview analysis.
+// Model: Llama 3.3 70B — fast, accurate, 30 RPM / 14,400 RPD
 // ─────────────────────────────────────────────────────────────
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 import AIInterviewSession from '../models/AIInterviewSession.js';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 /**
- * Helper: Send prompt to Gemini and parse JSON response.
- * Gemini sometimes wraps JSON in markdown fences — this strips them.
+ * Helper: Send prompt to Groq and parse JSON response.
  */
-async function askGemini(prompt) {
-  const result = await model.generateContent(prompt);
-  const text = result.response.text().trim();
+async function askLLM(prompt, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const response = await groq.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert interview evaluator. Always respond with ONLY valid JSON. No explanation, no markdown fences, no extra text.'
+          },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 2000,
+        response_format: { type: 'json_object' }
+      });
 
-  // Strip markdown code fences if present: ```json ... ``` or ``` ... ```
-  const cleaned = text
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/i, '')
-    .replace(/\s*```$/i, '')
-    .trim();
+      const text = response.choices[0]?.message?.content?.trim();
+      if (!text) throw new Error('Empty response from Groq');
 
-  return JSON.parse(cleaned);
+      // Clean just in case
+      const cleaned = text
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/\s*```$/i, '')
+        .trim();
+
+      return JSON.parse(cleaned);
+    } catch (e) {
+      const isRateLimit = e.status === 429 || e.message?.includes('429') || e.message?.includes('rate');
+
+      if (isRateLimit && attempt < retries) {
+        const delay = attempt * 5000;
+        console.log(`[Analysis] Rate limited, retrying in ${delay / 1000}s (attempt ${attempt}/${retries})...`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+
+      throw e;
+    }
+  }
 }
 
 /**
  * Full analysis pipeline for a completed interview.
  * Called by the BullMQ worker in aiInterviewJobs.js.
  *
- * Does 3 things:
  *   1. Score each question individually
  *   2. Generate overall interview assessment
  *   3. Compare interview answers vs resume data
@@ -50,7 +76,6 @@ export async function analyzeInterview(sessionId) {
   for (let i = 0; i < session.questions.length; i++) {
     const q = session.questions[i];
 
-    // No response → automatic zero
     if (!q.transcript || q.transcript.trim().length === 0) {
       q.analysis = {
         score: 0,
@@ -65,8 +90,8 @@ export async function analyzeInterview(sessionId) {
     }
 
     try {
-      q.analysis = await askGemini(
-        `You are an expert interview evaluator. Analyze this interview response.
+      q.analysis = await askLLM(
+        `Analyze this interview response.
 
 Job Title: ${session.jobId?.title || 'Unknown'}
 Job Requirements: ${session.jobId?.requirements || 'Not specified'}
@@ -76,7 +101,7 @@ Question Type: ${q.type}
 Candidate Response: "${q.transcript}"
 Response Duration: ${q.responseDuration?.toFixed(1)} seconds
 
-Return ONLY valid JSON, no explanation, no markdown:
+Return JSON with this exact structure:
 {
   "score": <0-100 overall>,
   "communicationScore": <0-100>,
@@ -87,17 +112,23 @@ Return ONLY valid JSON, no explanation, no markdown:
   "summary": "2-3 sentence evaluation"
 }`
       );
+      console.log(`[Analysis] Q${i + 1} scored: ${q.analysis.score}`);
     } catch (e) {
-      console.error(`[Analysis] Failed to parse Q${i}:`, e.message);
+      console.error(`[Analysis] Failed Q${i}:`, e.message);
       q.analysis = {
         score: 50,
         communicationScore: 50,
         relevanceScore: 50,
         depthScore: 50,
         strengths: [],
-        concerns: ['Analysis parsing failed'],
-        summary: 'Could not parse AI analysis.'
+        concerns: ['Analysis failed'],
+        summary: 'Could not generate analysis.'
       };
+    }
+
+    // Small delay between questions to stay within rate limits
+    if (i < session.questions.length - 1) {
+      await new Promise(r => setTimeout(r, 2000));
     }
   }
 
@@ -112,8 +143,8 @@ Return ONLY valid JSON, no explanation, no markdown:
     ).join('\n\n');
 
   try {
-    session.overallAnalysis = await askGemini(
-      `You are a senior hiring manager. Provide an overall assessment.
+    session.overallAnalysis = await askLLM(
+      `Provide an overall interview assessment.
 
 Job: ${session.jobId?.title || 'Unknown'}
 Candidate: ${session.candidateId?.name || 'Unknown'}
@@ -123,7 +154,7 @@ Attention Score: ${session.overallAttentionScore ?? 'N/A'}%
 Individual Responses:
 ${responseSummary}
 
-Return ONLY valid JSON, no explanation, no markdown:
+Return JSON with this exact structure:
 {
   "overallScore": <0-100>,
   "communicationScore": <0-100>,
@@ -135,8 +166,9 @@ Return ONLY valid JSON, no explanation, no markdown:
   "summary": "3-4 sentence executive summary"
 }`
     );
+    console.log(`[Analysis] Overall score: ${session.overallAnalysis.overallScore}`);
   } catch (e) {
-    console.error('[Analysis] Overall parse failed:', e.message);
+    console.error('[Analysis] Overall failed:', e.message);
     session.overallAnalysis = { overallScore: 0, summary: 'Analysis failed.' };
   }
 
@@ -145,8 +177,9 @@ Return ONLY valid JSON, no explanation, no markdown:
   // ═══════════════════════════════════════════════
   const resumeData = session.candidateId?.resumeData;
   if (resumeData) {
+    await new Promise(r => setTimeout(r, 2000));
     try {
-      session.overallAnalysis.resumeComparison = await askGemini(
+      session.overallAnalysis.resumeComparison = await askLLM(
         `Compare resume claims with interview responses.
 
 Resume Data: ${JSON.stringify(resumeData)}
@@ -154,7 +187,7 @@ Resume Data: ${JSON.stringify(resumeData)}
 Interview Responses:
 ${responseSummary}
 
-Return ONLY valid JSON, no explanation, no markdown:
+Return JSON with this exact structure:
 {
   "consistencies": ["what aligns"],
   "discrepancies": ["what doesn't match"],
@@ -162,7 +195,7 @@ Return ONLY valid JSON, no explanation, no markdown:
 }`
       );
     } catch (e) {
-      console.error('[Analysis] Comparison parse failed:', e.message);
+      console.error('[Analysis] Comparison failed:', e.message);
     }
   }
 

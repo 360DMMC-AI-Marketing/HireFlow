@@ -9,6 +9,50 @@ import QuestionBank from '../models/QuestionBank.js';
  * POST /api/v1/ai-interviews
  * Create a new AI interview session. Auto-selects questions from bank.
  */
+export const saveRecording = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No recording file provided' });
+    }
+
+    const session = await AIInterviewSession.findById(req.params.id);
+    if (!session) {
+      return res.status(404).json({ success: false, message: 'Session not found' });
+    }
+
+    const fileUrl = `/uploads/recordings/${req.file.filename}`;
+    const isVideo = req.file.mimetype.startsWith('video/');
+
+    if (isVideo) {
+      session.recordings.video = {
+        url: fileUrl,
+        s3Key: req.file.filename,  // reusing field name — stores filename for local
+        duration: session.duration || 0
+      };
+    } else {
+      session.recordings.audio = {
+        url: fileUrl,
+        s3Key: req.file.filename,
+        duration: session.duration || 0
+      };
+    }
+
+    await session.save();
+
+    res.json({
+      success: true,
+      data: {
+        url: fileUrl,
+        filename: req.file.filename,
+        size: req.file.size,
+        type: req.file.mimetype
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 export const createSession = async (req, res) => {
   try {
     const { jobId, candidateId, applicationId, questionIds, numQuestions = 10 } = req.body;

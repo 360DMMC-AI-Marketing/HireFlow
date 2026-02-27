@@ -12,12 +12,6 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Check for required environment variables
-if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'your_gemini_api_key_here') {
-  console.warn('⚠️  GEMINI_API_KEY is not set. Resume analysis will not work properly.');
-  console.warn('   Get your API key at: https://aistudio.google.com/app/apikey');
-}
-
 if (!process.env.REDIS_HOST && !process.env.REDIS_PORT) {
   console.warn('⚠️  Redis configuration not found. Make sure Redis is running on localhost:6379');
 }

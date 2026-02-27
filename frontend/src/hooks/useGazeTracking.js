@@ -5,10 +5,6 @@ import * as faceLandmarksDetection from '@tensorflow-models/face-landmarks-detec
 /**
  * Runs TensorFlow.js FaceMesh in the browser at ~10 FPS.
  * Calculates gaze score (0-100) from iris position relative to eye corners.
- *
- * @param {React.RefObject<HTMLVideoElement>} videoRef
- * @param {boolean} isActive - only track when interview is live
- * @returns {{ gazeScore, confidence, fps, isLoading, flushAttentionBuffer }}
  */
 export function useGazeTracking(videoRef, isActive = true) {
   const [gazeScore, setGazeScore] = useState(0);
@@ -21,47 +17,50 @@ export function useGazeTracking(videoRef, isActive = true) {
   const attentionBufferRef = useRef([]);
   const fpsCounterRef = useRef({ frames: 0, lastTime: Date.now() });
   const startTimeRef = useRef(Date.now());
+  const loggedFaceRef = useRef(false);
+  const loggedNoFaceRef = useRef(false);
 
   // ── Load model once ──
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      console.log('[Gaze] Loading TensorFlow.js + FaceMesh...');
       await tf.setBackend('webgl');
       await tf.ready();
+      console.log('[Gaze] TF backend ready:', tf.getBackend());
 
       const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
       const detector = await faceLandmarksDetection.createDetector(model, {
         runtime: 'tfjs',
-        refineLandmarks: true,   // needed for iris landmarks
-        maxFaces: 2              // detect if someone else appears
+        refineLandmarks: true,
+        maxFaces: 2
       });
 
       if (!cancelled) {
         detectorRef.current = detector;
         setIsLoading(false);
+        console.log('[Gaze] FaceMesh model loaded successfully');
       }
-    })();
+    })().catch(err => {
+      console.error('[Gaze] Model load failed:', err);
+    });
     return () => { cancelled = true; };
   }, []);
 
   // ── Gaze score calculation ──
   const calcGaze = useCallback((face) => {
     const kp = face.keypoints;
-    // Iris centers (from refineLandmarks)
-    const leftIris = kp[468];   // left iris center
-    const rightIris = kp[473];  // right iris center
+    const leftIris = kp[468];
+    const rightIris = kp[473];
     if (!leftIris || !rightIris) return 50;
 
-    // Eye corners
-    const LL = kp[33], LR = kp[133];   // left eye outer/inner
-    const RL = kp[362], RR = kp[263];  // right eye inner/outer
+    const LL = kp[33], LR = kp[133];
+    const RL = kp[362], RR = kp[263];
 
-    // Horizontal: iris position within eye (0=left edge, 1=right edge)
     const leftRatio = (leftIris.x - LL.x) / (LR.x - LL.x);
     const rightRatio = (rightIris.x - RL.x) / (RR.x - RL.x);
     const hDev = Math.abs(((leftRatio + rightRatio) / 2) - 0.5) * 2;
 
-    // Vertical
     const eyeTop = kp[159], eyeBot = kp[145];
     const vRatio = (leftIris.y - eyeTop.y) / (eyeBot.y - eyeTop.y);
     const vDev = Math.abs(vRatio - 0.5) * 2;
@@ -87,6 +86,17 @@ export function useGazeTracking(videoRef, isActive = true) {
   useEffect(() => {
     if (!isActive || isLoading || !videoRef?.current) return;
 
+    // Reset log flags when detection loop restarts
+    loggedFaceRef.current = false;
+    loggedNoFaceRef.current = false;
+
+    console.log('[Gaze] Detection loop starting, isActive:', isActive);
+
+    // Offscreen canvas for feeding frames to TF — fixes GPU/browser compat issues
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    let loggedStart = false;
+
     const detect = async () => {
       const vid = videoRef.current;
       if (!vid || vid.readyState < 2 || !detectorRef.current) {
@@ -94,8 +104,43 @@ export function useGazeTracking(videoRef, isActive = true) {
         return;
       }
 
+      // Check video has actual pixel data
+      if (vid.videoWidth === 0 || vid.videoHeight === 0) {
+        if (!loggedStart) {
+          console.log('[Gaze] Video element has 0 dimensions, waiting...', {
+            readyState: vid.readyState,
+            videoWidth: vid.videoWidth,
+            videoHeight: vid.videoHeight,
+            srcObject: !!vid.srcObject
+          });
+        }
+        animFrameRef.current = requestAnimationFrame(detect);
+        return;
+      }
+
+      // Size canvas to match video (once)
+      if (canvas.width !== vid.videoWidth || canvas.height !== vid.videoHeight) {
+        canvas.width = vid.videoWidth;
+        canvas.height = vid.videoHeight;
+        console.log('[Gaze] Canvas sized:', canvas.width, 'x', canvas.height);
+      }
+
+      if (!loggedStart) {
+        console.log('[Gaze] Detection loop started. Video:', vid.videoWidth, 'x', vid.videoHeight,
+          'readyState:', vid.readyState, 'srcObject:', !!vid.srcObject);
+        loggedStart = true;
+      }
+
       try {
-        const faces = await detectorRef.current.estimateFaces(vid);
+        // Draw current video frame to canvas — this is the key fix
+        ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
+        const faces = await detectorRef.current.estimateFaces(canvas);
+
+        // Log first 5 detection results
+        if (fpsCounterRef.current.frames < 5) {
+          console.log(`[Gaze] Frame ${fpsCounterRef.current.frames}: ${faces.length} face(s) found`,
+            faces.length > 0 ? `keypoints: ${faces[0].keypoints?.length}` : '');
+        }
 
         // FPS counter
         fpsCounterRef.current.frames++;
@@ -106,6 +151,12 @@ export function useGazeTracking(videoRef, isActive = true) {
         }
 
         if (faces.length > 0) {
+          if (!loggedFaceRef.current) {
+            console.log('[Gaze] ✅ Face detected! Tracking active. Keypoints:', faces[0].keypoints.length);
+            loggedFaceRef.current = true;
+            loggedNoFaceRef.current = false;
+          }
+
           const score = calcGaze(faces[0]);
           const headPose = calcHeadPose(faces[0]);
           setGazeScore(score);
@@ -119,6 +170,12 @@ export function useGazeTracking(videoRef, isActive = true) {
             multipleFaces: faces.length > 1
           });
         } else {
+          if (!loggedNoFaceRef.current) {
+            console.log('[Gaze] ❌ No face detected — check camera/lighting. Video size:', vid.videoWidth, 'x', vid.videoHeight);
+            loggedNoFaceRef.current = true;
+            loggedFaceRef.current = false;
+          }
+
           setGazeScore(0);
           setConfidence('Low');
           attentionBufferRef.current.push({

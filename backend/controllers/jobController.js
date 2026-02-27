@@ -1,12 +1,8 @@
 import Job from '../models/job.js';
 import Candidate from '../models/candidate.js';
-import { GoogleGenerativeAI } from '@google/generative-ai'; // Added Import
-import dotenv from 'dotenv'; // Added Import
+import Groq from 'groq-sdk';
 
-dotenv.config();
-
-// Initialize Gemini (Make sure GEMINI_API_KEY is in your .env file)
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 // @desc    Get all jobs with filters
 // @route   GET /api/jobs
@@ -16,12 +12,10 @@ export const getAllJobs = async (req, res) => {
     
     let query = {};
     
-    // Apply filters
     if (status && status !== 'All') query.status = status;
     if (department && department !== 'All') query.department = department;
     if (search) query.title = { $regex: search, $options: 'i' };
     
-    // Sort configuration
     const sortConfig = {};
     sortConfig[sortBy] = sortOrder === 'asc' ? 1 : -1;
     
@@ -29,7 +23,6 @@ export const getAllJobs = async (req, res) => {
       .populate('createdBy', 'firstName lastName email')
       .sort(sortConfig);
     
-    // Enrich jobs with real applicant counts from Candidate collection
     const jobIds = jobs.map(j => j._id);
     const counts = await Candidate.aggregate([
       { $match: { jobId: { $in: jobIds } } },
@@ -64,7 +57,6 @@ export const getJobById = async (req, res) => {
       return res.status(404).json({ message: 'Job not found' });
     }
     
-    // Enrich with real applicant count
     const applicantCount = await Candidate.countDocuments({ jobId: job._id });
     const jobObj = job.toObject();
     jobObj.analytics = {
@@ -84,10 +76,9 @@ export const createJob = async (req, res) => {
   try {
     const jobData = {
       ...req.body,
-      createdBy: req.user?._id // Assume auth middleware adds user
+      createdBy: req.user?._id
     };
     
-    // Generate slug for HireFlow portal if enabled
     if (jobData.distribution?.hireflowPortal?.enabled && !jobData.distribution.hireflowPortal.slug) {
       jobData.distribution.hireflowPortal.slug = jobData.title
         .toLowerCase()
@@ -122,7 +113,7 @@ export const updateJob = async (req, res) => {
   }
 };
 
-// @desc    Update job status (pause, close, activate)
+// @desc    Update job status
 // @route   PATCH /api/jobs/:id/status
 export const updateJobStatus = async (req, res) => {
   try {
@@ -222,7 +213,6 @@ export const getJobAnalytics = async (req, res) => {
       return res.status(404).json({ message: 'Job not found' });
     }
     
-    // Return analytics data
     res.status(200).json({
       analytics: job.analytics,
       status: job.status,
@@ -250,46 +240,56 @@ export const saveDraft = async (req, res) => {
   }
 };
 
-// --- THIS IS THE NEW AI FUNCTION (Replaces the old placeholder) ---
-
 // @desc    Generate job description using AI
 // @route   POST /api/jobs/generate-description
 export const generateDescription = async (req, res) => {
   try {
-    const { title, skills, keywords } = req.body; 
+    const { title, skills, keywords } = req.body;
 
     if (!title) return res.status(400).json({ message: 'Job title is required' });
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const response = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an expert HR Recruiter. Always respond with ONLY valid JSON. No explanation, no markdown fences.'
+        },
+        {
+          role: 'user',
+          content: `Write a professional Job Description for a "${title}".
 
-    const prompt = `
-      You are an expert HR Recruiter. Write a professional Job Description for a "${title}".
-      
-      Requirements to include: ${skills?.join(', ') || 'Standard industry skills'}
-      Keywords/Vibe: ${keywords || 'Professional'}
-      
-      Output ONLY valid JSON:
-      {
-        "description": "2 paragraph engaging company intro and role overview.",
-        "responsibilities": "Bullet points of daily tasks (HTML format <ul><li>...</li></ul>)",
-        "requirements": "Bullet points of required skills (HTML format <ul><li>...</li></ul>)",
-        "benefits": "Standard benefits list (HTML format <ul><li>...</li></ul>)"
-      }
-    `;
+Requirements to include: ${skills?.join(', ') || 'Standard industry skills'}
+Keywords/Vibe: ${keywords || 'Professional'}
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text().replace(/```json/g, '').replace(/```/g, '').trim();
-    
-    const jsonResponse = JSON.parse(text);
+Return JSON with this exact structure:
+{
+  "description": "2 paragraph engaging company intro and role overview.",
+  "responsibilities": "Bullet points of daily tasks (HTML format <ul><li>...</li></ul>)",
+  "requirements": "Bullet points of required skills (HTML format <ul><li>...</li></ul>)",
+  "benefits": "Standard benefits list (HTML format <ul><li>...</li></ul>)"
+}`
+        }
+      ],
+      temperature: 0.5,
+      max_tokens: 2000,
+      response_format: { type: 'json_object' }
+    });
 
+    const text = response.choices[0]?.message?.content?.trim();
+    const cleaned = text
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+
+    const jsonResponse = JSON.parse(cleaned);
     res.status(200).json(jsonResponse);
 
   } catch (error) {
     console.error("AI Generation Failed:", error);
-    // Fallback if AI fails (so the app doesn't crash)
     res.status(200).json({
-      description: `We are looking for a talented ${title} to join our team.`,
+      description: `We are looking for a talented ${req.body.title} to join our team.`,
       responsibilities: "<ul><li>TBD</li></ul>",
       requirements: "<ul><li>TBD</li></ul>",
       benefits: "<ul><li>Competitive Salary</li></ul>"

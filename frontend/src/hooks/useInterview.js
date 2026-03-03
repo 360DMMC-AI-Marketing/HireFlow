@@ -128,23 +128,59 @@ export function useInterview(sessionId, token) {
   async function startMicCapture(socket) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true }
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
       });
       mediaStreamRef.current = stream;
 
-      const actx = new AudioContext({ sampleRate: 16000 });
+      // Don't force sampleRate — browser ignores it. Use native rate and resample.
+      const actx = new AudioContext();
+      const nativeSR = actx.sampleRate;
+      const targetSR = 16000;
+      const ratio = nativeSR / targetSR;
+
+      console.log(`[Mic] AudioContext sampleRate: ${nativeSR}Hz -> resampling to ${targetSR}Hz (ratio: ${ratio.toFixed(2)})`);
+
       const source = actx.createMediaStreamSource(stream);
       const processor = actx.createScriptProcessor(4096, 1, 1);
 
       sourceRef.current = source;
       processorRef.current = { processor, actx };
 
+      let audioChunkCount = 0;
+
       processor.onaudioprocess = (e) => {
         const f32 = e.inputBuffer.getChannelData(0);
-        const i16 = new Int16Array(f32.length);
-        for (let i = 0; i < f32.length; i++) {
-          i16[i] = Math.max(-32768, Math.min(32767, Math.round(f32[i] * 32767)));
+
+        // Resample from native rate (usually 48000) to 16000
+        const outputLength = Math.floor(f32.length / ratio);
+        const resampled = new Float32Array(outputLength);
+        for (let i = 0; i < outputLength; i++) {
+          const srcIdx = Math.floor(i * ratio);
+          resampled[i] = f32[Math.min(srcIdx, f32.length - 1)];
         }
+
+        // Convert Float32 -> Int16 (PCM16 linear)
+        const i16 = new Int16Array(resampled.length);
+        for (let i = 0; i < resampled.length; i++) {
+          i16[i] = Math.max(-32768, Math.min(32767, Math.round(resampled[i] * 32767)));
+        }
+
+        // Log first few chunks with audio level
+        if (audioChunkCount < 3) {
+          let maxVal = 0;
+          for (let i = 0; i < i16.length; i++) {
+            const abs = Math.abs(i16[i]);
+            if (abs > maxVal) maxVal = abs;
+          }
+          console.log(`[Mic] Chunk ${audioChunkCount}: ${i16.length} samples, peak: ${maxVal}, bytes: ${i16.buffer.byteLength}`);
+        }
+        audioChunkCount++;
+
         socket.emit('audio-data', { sessionId, audio: i16.buffer });
       };
 
@@ -156,7 +192,6 @@ export function useInterview(sessionId, token) {
       setError('Microphone access failed');
     }
   }
-
   const startInterview = useCallback(() =>
     socketRef.current?.emit('start-interview', { sessionId }), [sessionId]);
 

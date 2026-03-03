@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Eye, Brain, Monitor, Plus, Play, Trash2, Link2,
   ArrowLeft, Video, Clock, BarChart3, CheckCircle2,
-  XCircle, AlertCircle, Loader2, Mic, RefreshCw, Search
+  XCircle, AlertCircle, Loader2, Mic, RefreshCw, Search,
+  Download, Pause, Volume2, VolumeX, Maximize,
+  SkipBack, SkipForward, FileText, Share2
 } from "lucide-react";
 import { useInterview } from "../../../hooks/useInterview";
 import { useGazeTracking } from "../../../hooks/useGazeTracking";
@@ -16,7 +18,13 @@ import {
 } from "../../../services/api/aiInterviewAPI";
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const BASE_URL = API.replace('/api', '');
 const getToken = () => localStorage.getItem('token');
+
+const fmt = (s) => {
+  if (s == null || isNaN(s)) return '0:00';
+  return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+};
 
 // ─── Status & Score Badges ───────────────────────────────────────────────────
 
@@ -45,6 +53,636 @@ const ScoreBadge = ({ score }) => {
                 score >= 40 ? 'text-amber-700 bg-amber-50 border-amber-200' :
                 'text-red-700 bg-red-50 border-red-200';
   return <span className={`text-sm font-bold px-2 py-0.5 rounded-md border ${color}`}>{score}</span>;
+};
+
+// ─── Attention Timeline (SVG) ────────────────────────────────────────────────
+
+const AttentionTimeline = ({ attentionData, questions, duration, currentTime, onSeek }) => {
+  const svgRef = useRef(null);
+  const W = 800, H = 120;
+  const PAD = { top: 10, right: 10, bottom: 25, left: 35 };
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top - PAD.bottom;
+
+  const points = useMemo(() => {
+    if (!attentionData?.length) return [];
+    const step = Math.max(1, Math.floor(attentionData.length / 200));
+    return attentionData.filter((_, i) => i % step === 0);
+  }, [attentionData]);
+
+  const maxTime = duration || (points.length ? Math.max(...points.map(p => p.timestamp)) : 60);
+  const toX = useCallback((t) => PAD.left + (t / maxTime) * plotW, [maxTime]);
+  const toY = useCallback((v) => PAD.top + plotH - (Math.min(100, Math.max(0, v || 0)) / 100) * plotH, []);
+
+  const pathD = useMemo(() => {
+    if (!points.length) return '';
+    return points.map((p, i) =>
+      (i === 0 ? 'M' : 'L') + toX(p.timestamp).toFixed(1) + ',' + toY(p.gazeScore).toFixed(1)
+    ).join(' ');
+  }, [points, toX, toY]);
+
+  const areaD = useMemo(() => {
+    if (!pathD || !points.length) return '';
+    const b = PAD.top + plotH;
+    const last = points[points.length - 1];
+    return pathD + ' L' + toX(last.timestamp).toFixed(1) + ',' + b
+      + ' L' + toX(points[0].timestamp).toFixed(1) + ',' + b + ' Z';
+  }, [pathD, points, toX]);
+
+  const qRegions = useMemo(() =>
+    (questions || [])
+      .filter(q => q.responseStartTime != null && q.responseEndTime != null)
+      .map((q, i) => ({
+        x: toX(q.responseStartTime),
+        w: Math.max(2, toX(q.responseEndTime) - toX(q.responseStartTime)),
+        label: 'Q' + (i + 1)
+      })),
+    [questions, toX]
+  );
+
+  const handleClick = (e) => {
+    if (!svgRef.current || !onSeek) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const clickX = (e.clientX - rect.left) * (W / rect.width);
+    onSeek(Math.max(0, Math.min(maxTime, ((clickX - PAD.left) / plotW) * maxTime)));
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-bold text-slate-900 text-sm">Attention Timeline</h3>
+        <div className="flex items-center gap-3 text-[10px] text-slate-400">
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-indigo-400 inline-block" /> Gaze
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-blue-200 inline-block" /> Answering
+          </span>
+        </div>
+      </div>
+      <svg ref={svgRef} viewBox={'0 0 ' + W + ' ' + H} className="w-full cursor-crosshair"
+        onClick={handleClick} style={{ height: 'auto', maxHeight: 140 }}>
+        {[0, 25, 50, 75, 100].map(v => (
+          <g key={v}>
+            <line x1={PAD.left} y1={toY(v)} x2={W - PAD.right} y2={toY(v)}
+              stroke="#e2e8f0" strokeWidth="0.5"
+              strokeDasharray={v === 0 || v === 100 ? 'none' : '2,3'} />
+            <text x={PAD.left - 4} y={toY(v) + 3} textAnchor="end"
+              fill="#94a3b8" fontSize="8">{v}</text>
+          </g>
+        ))}
+        {qRegions.map((r, i) => (
+          <g key={'qr' + i}>
+            <rect x={r.x} y={PAD.top} width={r.w} height={plotH}
+              fill="#dbeafe" opacity="0.4" rx="2" />
+            <text x={r.x + r.w / 2} y={H - 4} textAnchor="middle"
+              fill="#64748b" fontSize="8" fontWeight="600">{r.label}</text>
+          </g>
+        ))}
+        {areaD && <path d={areaD} fill="url(#gazeGrad)" opacity="0.3" />}
+        {pathD && <path d={pathD} fill="none" stroke="#818cf8"
+          strokeWidth="1.5" strokeLinejoin="round" />}
+        {currentTime > 0 && (
+          <line x1={toX(currentTime)} y1={PAD.top}
+            x2={toX(currentTime)} y2={PAD.top + plotH}
+            stroke="#ef4444" strokeWidth="1.5" opacity="0.8" />
+        )}
+        {[0, 1, 2, 3, 4].map(i => {
+          const t = (maxTime / 4) * i;
+          return (
+            <text key={'t' + i} x={toX(t)} y={H - 4}
+              textAnchor="middle" fill="#94a3b8" fontSize="8">{fmt(t)}</text>
+          );
+        })}
+        <defs>
+          <linearGradient id="gazeGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#818cf8" />
+            <stop offset="100%" stopColor="#818cf8" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
+  );
+};
+
+// ─── Video Player ────────────────────────────────────────────────────────────
+
+const VideoPlayer = ({ src, onTimeUpdate, registerSeek }) => {
+  const videoRef = useRef(null);
+  const progressRef = useRef(null);
+  const [playing, setPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [muted, setMuted] = useState(false);
+
+  const seekTo = useCallback((t) => {
+    if (videoRef.current) { videoRef.current.currentTime = t; setCurrentTime(t); }
+  }, []);
+
+  useEffect(() => { if (registerSeek) registerSeek(seekTo); }, [seekTo, registerSeek]);
+
+  const togglePlay = () => {
+    if (!videoRef.current) return;
+    playing ? videoRef.current.pause() : videoRef.current.play();
+    setPlaying(!playing);
+  };
+
+  const handleTimeUpdate = () => {
+    if (!videoRef.current) return;
+    const t = videoRef.current.currentTime;
+    setCurrentTime(t);
+    if (onTimeUpdate) onTimeUpdate(t);
+  };
+
+  const handleProgressClick = (e) => {
+    if (!progressRef.current || !videoRef.current) return;
+    const rect = progressRef.current.getBoundingClientRect();
+    videoRef.current.currentTime = ((e.clientX - rect.left) / rect.width) * duration;
+  };
+
+  const skip = (d) => {
+    if (videoRef.current)
+      videoRef.current.currentTime = Math.max(0, Math.min(duration, videoRef.current.currentTime + d));
+  };
+
+  const pct = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  if (!src) return (
+    <div className="bg-slate-900 rounded-2xl aspect-video flex flex-col items-center justify-center text-slate-500">
+      <Video className="w-16 h-16 mb-3 text-slate-600" />
+      <p className="text-sm font-medium">No recording available</p>
+      <p className="text-xs text-slate-600 mt-1">Video was not recorded or has been removed.</p>
+    </div>
+  );
+
+  return (
+    <div className="bg-slate-900 rounded-2xl overflow-hidden">
+      <div className="relative aspect-video bg-black cursor-pointer" onClick={togglePlay}>
+        <video ref={videoRef} src={src} className="w-full h-full object-contain"
+          onTimeUpdate={handleTimeUpdate}
+          onLoadedMetadata={() => videoRef.current && setDuration(videoRef.current.duration)}
+          onEnded={() => setPlaying(false)} playsInline />
+        {!playing && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+            <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
+              <Play className="w-7 h-7 text-white ml-1" fill="white" />
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="px-4 py-3 space-y-2">
+        <div ref={progressRef} className="w-full h-1.5 bg-slate-700 rounded-full cursor-pointer group"
+          onClick={handleProgressClick}>
+          <div className="h-full bg-indigo-500 rounded-full relative transition-all"
+            style={{ width: pct + '%' }}>
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button onClick={() => skip(-10)}
+              className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition">
+              <SkipBack className="w-4 h-4" />
+            </button>
+            <button onClick={togglePlay}
+              className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition">
+              {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+            </button>
+            <button onClick={() => skip(10)}
+              className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition">
+              <SkipForward className="w-4 h-4" />
+            </button>
+            <span className="text-xs text-slate-400 font-mono ml-2">
+              {fmt(currentTime)} / {fmt(duration)}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => {
+              if (videoRef.current) { videoRef.current.muted = !muted; setMuted(!muted); }
+            }} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition">
+              {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+            </button>
+            <button onClick={() => videoRef.current?.requestFullscreen?.()}
+              className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition">
+              <Maximize className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Synced Transcript ───────────────────────────────────────────────────────
+
+const SyncedTranscript = ({ questions, currentTime, onSeekTo }) => {
+  const activeRef = useRef(null);
+
+  const activeIdx = useMemo(() => {
+    if (currentTime == null) return -1;
+    for (let i = 0; i < (questions || []).length; i++) {
+      const q = questions[i];
+      if (q.responseStartTime != null && q.responseEndTime != null &&
+          currentTime >= q.responseStartTime && currentTime <= q.responseEndTime) return i;
+    }
+    return -1;
+  }, [questions, currentTime]);
+
+  useEffect(() => {
+    if (activeRef.current) activeRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [activeIdx]);
+
+  if (!questions?.length) return (
+    <div className="bg-white rounded-xl border border-slate-200 p-6 text-center">
+      <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+      <p className="text-sm text-slate-500">No transcript data</p>
+    </div>
+  );
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200">
+      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+        <h3 className="font-bold text-slate-900 text-sm">Interview Transcript</h3>
+        <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
+          {questions.length} Questions
+        </span>
+      </div>
+      <div className="max-h-[460px] overflow-y-auto divide-y divide-slate-50">
+        {questions.map((q, i) => {
+          const active = i === activeIdx;
+          return (
+            <div key={i} ref={active ? activeRef : null}
+              className={`px-4 py-3.5 transition-colors cursor-pointer hover:bg-slate-50 ${
+                active ? 'bg-indigo-50/60 border-l-2 border-l-indigo-500' : 'border-l-2 border-l-transparent'
+              }`}
+              onClick={() => onSeekTo && q.responseStartTime != null && onSeekTo(q.responseStartTime)}>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                  active ? 'text-indigo-600' : 'text-slate-400'
+                }`}>
+                  Q{i + 1} · {q.questionType || q.type || 'general'}
+                </span>
+                {q.responseStartTime != null && (
+                  <span className="text-[10px] text-slate-400 font-mono">{fmt(q.responseStartTime)}</span>
+                )}
+                {q.analysis?.score != null && <ScoreBadge score={q.analysis.score} />}
+              </div>
+              <p className={`text-xs font-medium mb-1.5 ${active ? 'text-indigo-900' : 'text-slate-700'}`}>
+                {q.questionText}
+              </p>
+              {q.transcript
+                ? <p className={`text-xs leading-relaxed ${active ? 'text-indigo-800/80' : 'text-slate-500'}`}>
+                    {q.transcript}
+                  </p>
+                : <p className="text-xs text-slate-300 italic">No response recorded</p>
+              }
+              {q.attentionFlags?.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {q.attentionFlags.map((fl, j) => (
+                    <span key={j} className="text-[9px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded-full border border-amber-200">
+                      {fl}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// ─── Playback View (Video + Transcript + Analysis) ──────────────────────────
+
+const PlaybackView = ({ sessionId, onBack }) => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [tab, setTab] = useState('overview');
+  const [copied, setCopied] = useState(false);
+  const seekFnRef = useRef(null);
+
+  useEffect(() => {
+    (async () => {
+      try { setData((await getAnalysis(sessionId)).data.data); }
+      catch (e) { console.error('Analysis load failed:', e); }
+      finally { setLoading(false); }
+    })();
+  }, [sessionId]);
+
+  const seekTo = useCallback((t) => {
+    if (seekFnRef.current) seekFnRef.current(t);
+    setCurrentTime(t);
+  }, []);
+
+  const videoUrl = useMemo(() => {
+    const url = data?.recordings?.video?.url || data?.recordings?.audio?.url;
+    if (!url) return null;
+    if (url.startsWith('http')) return url;
+    return BASE_URL + '/' + url.replace(/^\//, '');
+  }, [data]);
+
+  const downloadTranscript = () => {
+    if (!data) return;
+    let txt = 'INTERVIEW TRANSCRIPT\n';
+    txt += '='.repeat(50) + '\n';
+    txt += 'Date: ' + new Date(data.createdAt || Date.now()).toLocaleString() + '\n';
+    txt += 'Duration: ' + fmt(data.duration) + '\n';
+    txt += 'Overall Score: ' + (data.overallAnalysis?.overallScore ?? 'N/A') + '/100\n';
+    txt += 'Attention Score: ' + (data.overallAttentionScore ?? 'N/A') + '%\n\n';
+
+    (data.questions || []).forEach((q, i) => {
+      txt += '-'.repeat(40) + '\n';
+      txt += 'Q' + (i + 1) + ' [' + (q.questionType || q.type || 'general') + ']';
+      if (q.analysis?.score != null) txt += ' — Score: ' + q.analysis.score + '/100';
+      txt += '\n';
+      txt += q.questionText + '\n\n';
+      txt += 'RESPONSE (' + (q.responseDuration?.toFixed(0) || '?') + 's):\n';
+      txt += (q.transcript || '(no response)') + '\n';
+      if (q.analysis?.summary) txt += '\nAI Notes: ' + q.analysis.summary + '\n';
+      if (q.attentionFlags?.length) txt += 'Flags: ' + q.attentionFlags.join(', ') + '\n';
+      txt += '\n';
+    });
+
+    const o = data.overallAnalysis || {};
+    if (o.summary) txt += '='.repeat(50) + '\nSUMMARY\n' + o.summary + '\n\n';
+    if (o.strengths?.length) txt += 'STRENGTHS:\n' + o.strengths.map(s => '  + ' + s).join('\n') + '\n\n';
+    if (o.concerns?.length) txt += 'CONCERNS:\n' + o.concerns.map(c => '  - ' + c).join('\n') + '\n';
+
+    const blob = new Blob([txt], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'interview-transcript-' + sessionId.slice(-6) + '.txt';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const shareLink = async () => {
+    const url = window.location.origin + window.location.pathname + '?session=' + sessionId;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch { alert('Link: ' + url); }
+  };
+
+  if (loading) return (
+    <div className="flex items-center justify-center h-96">
+      <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+    </div>
+  );
+
+  if (!data) return (
+    <div className="space-y-6">
+      <button onClick={onBack} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 text-sm font-medium">
+        <ArrowLeft className="w-4 h-4" /> Back
+      </button>
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-8 text-center">
+        <AlertCircle className="w-10 h-10 text-amber-400 mx-auto mb-3" />
+        <p className="text-amber-800 font-bold">Analysis not ready</p>
+        <p className="text-amber-600 text-sm mt-1">Still processing. Check back in a moment.</p>
+      </div>
+    </div>
+  );
+
+  const o = data.overallAnalysis || {};
+  const recColor = {
+    'strong-yes': 'bg-emerald-100 text-emerald-800',
+    yes: 'bg-green-100 text-green-800',
+    maybe: 'bg-amber-100 text-amber-800',
+    no: 'bg-red-100 text-red-800',
+    'strong-no': 'bg-red-200 text-red-900'
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <button onClick={onBack} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 text-sm font-medium transition">
+            <ArrowLeft className="w-4 h-4" /> Back to Sessions
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Interview Playback</h1>
+            <p className="text-slate-500 text-sm mt-0.5">
+              {data.candidateId?.name || 'Candidate'} · {data.jobId?.title || 'Position'}
+              {data.duration ? ' · ' + fmt(data.duration) : ''}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={shareLink}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition ${
+              copied ? 'bg-green-50 text-green-700 border-green-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+            }`}>
+            {copied ? <CheckCircle2 className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+            {copied ? 'Copied!' : 'Share'}
+          </button>
+          <button onClick={downloadTranscript}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition">
+            <FileText className="w-4 h-4" /> Transcript
+          </button>
+          {videoUrl && (
+            <a href={videoUrl} download
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition">
+              <Download className="w-4 h-4" /> Video
+            </a>
+          )}
+        </div>
+      </div>
+
+      {/* Score Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        {[
+          { label: 'Overall', val: o.overallScore, color: 'text-slate-900' },
+          { label: 'Communication', val: o.communicationScore, color: 'text-blue-600' },
+          { label: 'Technical', val: o.technicalScore, color: 'text-purple-600' },
+          { label: 'Culture Fit', val: o.cultureFitScore, color: 'text-teal-600' },
+        ].map(({ label, val, color }) => (
+          <div key={label} className="bg-white rounded-xl border border-slate-200 p-4 text-center">
+            <p className="text-xs text-slate-500 font-medium mb-1">{label}</p>
+            <p className={`text-3xl font-bold ${color}`}>{val ?? '—'}</p>
+          </div>
+        ))}
+        <div className="bg-white rounded-xl border border-slate-200 p-4 text-center flex flex-col items-center justify-center">
+          <p className="text-xs text-slate-500 font-medium mb-2">Verdict</p>
+          <span className={`text-xs font-bold px-3 py-1.5 rounded-lg ${recColor[o.recommendation] || 'bg-slate-100 text-slate-600'}`}>
+            {o.recommendation?.replace('-', ' ').toUpperCase() || '—'}
+          </span>
+        </div>
+      </div>
+
+      {/* Video + Transcript Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <div className="lg:col-span-3 space-y-4">
+          <VideoPlayer src={videoUrl} onTimeUpdate={setCurrentTime}
+            registerSeek={(fn) => { seekFnRef.current = fn; }} />
+          <AttentionTimeline attentionData={data.attentionData} questions={data.questions}
+            duration={data.duration} currentTime={currentTime} onSeek={seekTo} />
+        </div>
+        <div className="lg:col-span-2">
+          <SyncedTranscript questions={data.questions} currentTime={currentTime} onSeekTo={seekTo} />
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="border-b border-slate-200">
+        <div className="flex gap-6">
+          {['overview', 'questions', 'resume'].map(t => (
+            <button key={t} onClick={() => setTab(t)}
+              className={`pb-3 text-sm font-semibold transition border-b-2 ${
+                tab === t ? 'text-indigo-600 border-indigo-600' : 'text-slate-400 border-transparent hover:text-slate-600'
+              }`}>
+              {t.charAt(0).toUpperCase() + t.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Overview Tab */}
+      {tab === 'overview' && (
+        <div className="space-y-4">
+          {o.summary && (
+            <div className="bg-white rounded-xl border border-slate-200 p-5">
+              <h3 className="font-bold text-slate-900 mb-2">Summary</h3>
+              <p className="text-sm text-slate-700 leading-relaxed">{o.summary}</p>
+            </div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {o.strengths?.length > 0 && (
+              <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-5">
+                <h3 className="font-bold text-emerald-900 mb-3">Strengths</h3>
+                <ul className="space-y-2">
+                  {o.strengths.map((s, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-emerald-800">
+                      <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />{s}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {o.concerns?.length > 0 && (
+              <div className="bg-red-50 rounded-xl border border-red-200 p-5">
+                <h3 className="font-bold text-red-900 mb-3">Concerns</h3>
+                <ul className="space-y-2">
+                  {o.concerns.map((c, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-red-800">
+                      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />{c}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Questions Tab */}
+      {tab === 'questions' && (
+        <div className="space-y-4">
+          {(data.questions || []).map((q, i) => (
+            <div key={i} className="bg-white border border-slate-100 rounded-xl p-4 hover:border-slate-200 transition">
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      {q.questionType || q.type}
+                    </span>
+                    <ScoreBadge score={q.analysis?.score} />
+                    {q.responseStartTime != null && (
+                      <button onClick={() => seekTo(q.responseStartTime)}
+                        className="text-[10px] text-indigo-500 hover:text-indigo-700 font-mono flex items-center gap-1">
+                        <Play className="w-3 h-3" /> {fmt(q.responseStartTime)}
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-sm font-medium text-slate-800">{q.questionText}</p>
+                </div>
+                {q.averageGazeScore != null && (
+                  <span className="text-xs text-slate-500 ml-4 shrink-0 flex items-center gap-1">
+                    <Eye className="w-3 h-3" />{q.averageGazeScore}%
+                  </span>
+                )}
+              </div>
+              {q.transcript && (
+                <div className="bg-slate-50 rounded-lg p-3 mt-2">
+                  <p className="text-[10px] text-slate-400 font-semibold uppercase mb-1">
+                    Response ({q.responseDuration?.toFixed(0)}s)
+                  </p>
+                  <p className="text-sm text-slate-700">{q.transcript}</p>
+                </div>
+              )}
+              {q.analysis?.summary && (
+                <p className="text-xs text-slate-500 mt-2 italic">{q.analysis.summary}</p>
+              )}
+              {q.attentionFlags?.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {q.attentionFlags.map((fl, j) => (
+                    <span key={j} className="text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">
+                      {fl}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Resume Comparison Tab */}
+      {tab === 'resume' && (
+        <div className="space-y-4">
+          {o.resumeComparison ? (
+            <>
+              {o.resumeComparison.consistencies?.length > 0 && (
+                <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-5">
+                  <h3 className="font-bold text-emerald-900 mb-3">Consistencies with Resume</h3>
+                  <ul className="space-y-2">
+                    {o.resumeComparison.consistencies.map((c, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-emerald-800">
+                        <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />{c}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {o.resumeComparison.discrepancies?.length > 0 && (
+                <div className="bg-red-50 rounded-xl border border-red-200 p-5">
+                  <h3 className="font-bold text-red-900 mb-3">Discrepancies</h3>
+                  <ul className="space-y-2">
+                    {o.resumeComparison.discrepancies.map((d, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-red-800">
+                        <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />{d}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {o.resumeComparison.additionalInsights?.length > 0 && (
+                <div className="bg-blue-50 rounded-xl border border-blue-200 p-5">
+                  <h3 className="font-bold text-blue-900 mb-3">Additional Insights</h3>
+                  <ul className="space-y-2">
+                    {o.resumeComparison.additionalInsights.map((a, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-blue-800">
+                        <Eye className="w-4 h-4 mt-0.5 shrink-0" />{a}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
+              <FileText className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+              <p className="text-slate-600 font-medium">No resume comparison available</p>
+              <p className="text-slate-400 text-sm mt-1">Resume data was not provided for this interview.</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 };
 
 // ─── Session List ────────────────────────────────────────────────────────────
@@ -331,129 +969,6 @@ const SessionList = ({ onOpenSession, onViewResults }) => {
   );
 };
 
-// ─── Results View ────────────────────────────────────────────────────────────
-
-const ResultsView = ({ sessionId, onBack }) => {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      try { setData((await getAnalysis(sessionId)).data.data); }
-      catch (e) { console.error('Analysis load failed:', e); }
-      finally { setLoading(false); }
-    })();
-  }, [sessionId]);
-
-  if (loading) return <div className="flex items-center justify-center h-96"><Loader2 className="w-8 h-8 text-indigo-500 animate-spin" /></div>;
-
-  if (!data) return (
-    <div className="space-y-6">
-      <button onClick={onBack} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 text-sm font-medium"><ArrowLeft className="w-4 h-4" /> Back</button>
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-8 text-center">
-        <AlertCircle className="w-10 h-10 text-amber-400 mx-auto mb-3" />
-        <p className="text-amber-800 font-bold">Analysis not ready</p>
-        <p className="text-amber-600 text-sm mt-1">Still processing. Check back in a moment.</p>
-      </div>
-    </div>
-  );
-
-  const o = data.overallAnalysis || {};
-  const recColor = { 'strong-yes': 'bg-emerald-100 text-emerald-800', yes: 'bg-green-100 text-green-800', maybe: 'bg-amber-100 text-amber-800', no: 'bg-red-100 text-red-800', 'strong-no': 'bg-red-200 text-red-900' };
-
-  return (
-    <div className="space-y-6">
-      <button onClick={onBack} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 text-sm font-medium"><ArrowLeft className="w-4 h-4" /> Back to Sessions</button>
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Interview Analysis</h1>
-        <p className="text-slate-500 text-sm mt-1">{data.duration ? `${Math.round(data.duration / 60)} min` : ''} • Attention: {data.overallAttentionScore ?? 'N/A'}%</p>
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        {[
-          { label: 'Overall', val: o.overallScore, color: 'text-slate-900' },
-          { label: 'Communication', val: o.communicationScore, color: 'text-blue-600' },
-          { label: 'Technical', val: o.technicalScore, color: 'text-purple-600' },
-          { label: 'Culture Fit', val: o.cultureFitScore, color: 'text-teal-600' },
-        ].map(({ label, val, color }) => (
-          <div key={label} className="bg-white rounded-xl border border-slate-200 p-4 text-center">
-            <p className="text-xs text-slate-500 font-medium mb-1">{label}</p>
-            <p className={`text-3xl font-bold ${color}`}>{val ?? '—'}</p>
-          </div>
-        ))}
-        <div className="bg-white rounded-xl border border-slate-200 p-4 text-center flex flex-col items-center justify-center">
-          <p className="text-xs text-slate-500 font-medium mb-2">Verdict</p>
-          <span className={`text-xs font-bold px-3 py-1.5 rounded-lg ${recColor[o.recommendation] || 'bg-slate-100 text-slate-600'}`}>
-            {o.recommendation?.replace('-', ' ').toUpperCase() || '—'}
-          </span>
-        </div>
-      </div>
-
-      {o.summary && (
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h3 className="font-bold text-slate-900 mb-2">Summary</h3>
-          <p className="text-sm text-slate-700 leading-relaxed">{o.summary}</p>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {o.strengths?.length > 0 && (
-          <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-5">
-            <h3 className="font-bold text-emerald-900 mb-3">Strengths</h3>
-            <ul className="space-y-2">{o.strengths.map((s, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-emerald-800"><CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />{s}</li>
-            ))}</ul>
-          </div>
-        )}
-        {o.concerns?.length > 0 && (
-          <div className="bg-red-50 rounded-xl border border-red-200 p-5">
-            <h3 className="font-bold text-red-900 mb-3">Concerns</h3>
-            <ul className="space-y-2">{o.concerns.map((c, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-red-800"><AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />{c}</li>
-            ))}</ul>
-          </div>
-        )}
-      </div>
-
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 className="font-bold text-slate-900 mb-4">Question Breakdown</h3>
-        <div className="space-y-4">
-          {(data.questions || []).map((q, i) => (
-            <div key={i} className="border border-slate-100 rounded-xl p-4 hover:border-slate-200 transition">
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{q.type}</span>
-                    <ScoreBadge score={q.analysis?.score} />
-                  </div>
-                  <p className="text-sm font-medium text-slate-800">{q.questionText}</p>
-                </div>
-                {q.averageGazeScore != null && (
-                  <span className="text-xs text-slate-500 ml-4 shrink-0 flex items-center gap-1"><Eye className="w-3 h-3" />{q.averageGazeScore}%</span>
-                )}
-              </div>
-              {q.transcript && (
-                <div className="bg-slate-50 rounded-lg p-3 mt-2">
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase mb-1">Response ({q.responseDuration?.toFixed(0)}s)</p>
-                  <p className="text-sm text-slate-700">{q.transcript}</p>
-                </div>
-              )}
-              {q.analysis?.summary && <p className="text-xs text-slate-500 mt-2 italic">{q.analysis.summary}</p>}
-              {q.attentionFlags?.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {q.attentionFlags.map((f, j) => (
-                    <span key={j} className="text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">{f}</span>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // ─── Live Interview View ─────────────────────────────────────────────────────
 
 const LiveSessionView = ({ sessionId, onBack }) => {
@@ -462,10 +977,6 @@ const LiveSessionView = ({ sessionId, onBack }) => {
   const [stream, setStream] = useState(null);
   const [elapsed, setElapsed] = useState(0);
 
-  // ═══════════════════════════════════════════════════
-  // HOOKS FIRST — React requires consistent hook order
-  // ═══════════════════════════════════════════════════
-
   const { isRecording, isUploading, uploadProgress, startRecording, stopRecording, uploadRecording } = useMediaRecorder();
   const { state, questionIndex, totalQuestions, currentQuestion, transcript, isConnected, error, startInterview, endInterview, sendAttentionData } = useInterview(sessionId, token);
 
@@ -473,14 +984,6 @@ const LiveSessionView = ({ sessionId, onBack }) => {
 
   const { gazeScore, confidence, fps, isLoading, flushAttentionBuffer } = useGazeTracking(videoRef, interviewActive);
 
-  // ═══════════════════════════════════════════════════
-  // EFFECTS
-  // ═══════════════════════════════════════════════════
-
-  // ── Camera: get video+audio stream, attach to <video> element ──
-  // Audio included so MediaRecorder captures both tracks.
-  // Video element is muted so candidate doesn't hear echo.
-  // useInterview creates a SEPARATE 16kHz audio stream for Deepgram.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -511,7 +1014,6 @@ const LiveSessionView = ({ sessionId, onBack }) => {
     };
   }, []);
 
-  // ── Recording: start when interview active + stream ready, stop on done ──
   useEffect(() => {
     if (interviewActive && stream && !isRecording) {
       startRecording(stream);
@@ -524,7 +1026,6 @@ const LiveSessionView = ({ sessionId, onBack }) => {
     }
   }, [state, stream, isRecording, interviewActive]);
 
-  // ── Flush gaze data to server every 5s ──
   useEffect(() => {
     const iv = setInterval(() => {
       const d = flushAttentionBuffer();
@@ -533,18 +1034,13 @@ const LiveSessionView = ({ sessionId, onBack }) => {
     return () => clearInterval(iv);
   }, [flushAttentionBuffer, sendAttentionData]);
 
-  // ── Elapsed timer ──
   useEffect(() => {
     if (!interviewActive) return;
     const iv = setInterval(() => setElapsed(p => p + 1), 1000);
     return () => clearInterval(iv);
   }, [interviewActive]);
 
-  // ═══════════════════════════════════════════════════
-  // RENDER
-  // ═══════════════════════════════════════════════════
-
-  const fmt = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  const liveFmt = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
   const gc = gazeScore > 85 ? 12 : gazeScore > 60 ? 5 : -8;
 
   return (
@@ -593,7 +1089,7 @@ const LiveSessionView = ({ sessionId, onBack }) => {
                 <span className="flex items-center gap-1.5"><Eye className="w-4 h-4" /> Gaze: {gazeScore}%</span>
                 <span className="flex items-center gap-1.5"><Mic className="w-4 h-4" /> Focus: {confidence}</span>
               </div>
-              <span className="text-white font-mono text-lg tracking-wider">{fmt(elapsed)}</span>
+              <span className="text-white font-mono text-lg tracking-wider">{liveFmt(elapsed)}</span>
             </div>
           </div>
 
@@ -718,7 +1214,7 @@ export const AIVideoView = () => {
     case 'live':
       return <LiveSessionView sessionId={view.sessionId} onBack={() => setView({ type: 'list' })} />;
     case 'results':
-      return <ResultsView sessionId={view.sessionId} onBack={() => setView({ type: 'list' })} />;
+      return <PlaybackView sessionId={view.sessionId} onBack={() => setView({ type: 'list' })} />;
     default:
       return (
         <SessionList

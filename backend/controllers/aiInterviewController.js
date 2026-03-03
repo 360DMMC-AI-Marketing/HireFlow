@@ -21,8 +21,7 @@ export const saveRecording = async (req, res) => {
     }
 
     const fileUrl = `/uploads/recordings/${req.file.filename}`;
-    const isVideo = req.file.mimetype.startsWith('video/');
-
+    const isVideo = req.file.mimetype.startsWith('video/') || req.file.filename.endsWith('.webm');
     if (isVideo) {
       session.recordings.video = {
         url: fileUrl,
@@ -260,15 +259,23 @@ export const getAnalysis = async (req, res) => {
         overallAnalysis: session.overallAnalysis,
         questions: session.questions.map(q => ({
           questionText: q.questionText,
-          type: q.type,
+          questionType: q.questionType,
+          type: q.questionType,
           transcript: q.transcript,
           analysis: q.analysis,
           averageGazeScore: q.averageGazeScore,
           attentionFlags: q.attentionFlags,
-          responseDuration: q.responseDuration
+          responseDuration: q.responseDuration,
+          responseStartTime: q.responseStartTime,
+          responseEndTime: q.responseEndTime
         })),
         overallAttentionScore: session.overallAttentionScore,
-        duration: session.duration
+        duration: session.duration,
+        recordings: session.recordings,
+        candidateId: session.candidateId,
+        jobId: session.jobId,
+        createdAt: session.createdAt,
+        attentionData: session.attentionData
       }
     });
   } catch (err) {

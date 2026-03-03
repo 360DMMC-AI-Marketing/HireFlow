@@ -143,7 +143,7 @@ class InterviewFlowManager {
   }
 
   // ─────────────────────────────────────────────────
-  // SILENCE — 3s after last speech → answer accepted
+  // SILENCE — 4s after last speech → answer accepted
   // ─────────────────────────────────────────────────
   handleSilence(sessionId, questionIndex) {
     if (this.silenceTimer) clearTimeout(this.silenceTimer);
@@ -195,7 +195,7 @@ class InterviewFlowManager {
       }
 
       setTimeout(() => this.askNextQuestion(), 1500);
-    }, 3000);
+    }, 4000);
   }
 
   // ─────────────────────────────────────────────────
@@ -245,24 +245,41 @@ class InterviewFlowManager {
   // ─────────────────────────────────────────────────
   // AUDIO — pipe from frontend → Deepgram
   // ─────────────────────────────────────────────────
-  receiveAudio(audioData) {
+    receiveAudio(audioData) {
+    if (!this.audioChunkCount) this.audioChunkCount = 0;
+    this.audioChunkCount++;
+
+    if (this.audioChunkCount <= 5) {
+      console.log(`[Audio] Chunk ${this.audioChunkCount}: type=${typeof audioData}, constructor=${audioData?.constructor?.name}, byteLength=${audioData?.byteLength ?? audioData?.length ?? '?'}, sttOpen=${!!this.sttConnection}`);
+    }
+
     if (this.sttConnection) {
-      this.sttConnection.send(Buffer.from(audioData));
+      try {
+        const buf = Buffer.from(audioData);
+        if (this.audioChunkCount <= 3) {
+          console.log(`[Audio] Sending ${buf.length} bytes to Deepgram`);
+        }
+        this.sttConnection.send(buf);
+      } catch (e) {
+        console.error('[Audio] Send error:', e.message);
+      }
+    } else if (this.audioChunkCount <= 3) {
+      console.log('[Audio] No STT connection - dropping chunk');
     }
   }
 
   // ─────────────────────────────────────────────────
   // CLEANUP
   // ─────────────────────────────────────────────────
-  cleanupListening() {
+   cleanupListening() {
     if (this.sttConnection) {
       try { this.sttConnection.close(); } catch (e) { /* ignore */ }
       this.sttConnection = null;
     }
     if (this.silenceTimer) { clearTimeout(this.silenceTimer); this.silenceTimer = null; }
     if (this.noSpeechTimer) { clearTimeout(this.noSpeechTimer); this.noSpeechTimer = null; }
+    this.audioChunkCount = 0;  // ← add this line
   }
-
   destroy() {
     this.cleanupListening();
   }

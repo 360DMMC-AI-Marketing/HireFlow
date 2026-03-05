@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import api from '@/utils/axios';
 import { toast } from 'sonner';
 import IntegrationsPage from '../integrations/IntegrationsPage';
+import BillingPage from '../billing/BillingPage';
 import { 
   Building, Share2, CreditCard, Users, Upload, Plus, Trash2, 
   Loader2, Save, Palette, Globe
@@ -42,9 +43,8 @@ const CompanyTab = () => {
     try {
       setSaving(true);
       const payload = { ...form, branding };
-      const endpoint = company ? '/company' : '/company';
       const method = company ? 'put' : 'post';
-      const { data } = await api[method](endpoint, payload);
+      const { data } = await api[method]('/company', payload);
       setCompany(data.company);
       toast.success(company ? 'Company updated' : 'Company created');
     } catch (err) {
@@ -204,46 +204,6 @@ const CompanyTab = () => {
   );
 };
 
-const BillingTab = () => (
-  <div className="text-center py-16">
-    <div className="w-20 h-20 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
-      <CreditCard className="text-indigo-400" size={36} />
-    </div>
-    <h3 className="text-xl font-bold text-gray-900 mb-2">Billing & Subscription</h3>
-    <p className="text-gray-500 text-sm mb-6 max-w-md mx-auto">
-      Manage your plan, payment methods, and invoices. We're working hard to bring you a seamless billing experience.
-    </p>
-    <div className="inline-flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 px-5 py-2.5 rounded-xl text-sm font-semibold mb-8">
-      <span className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
-      Coming Soon
-    </div>
-    
-    {/* Plan preview cards */}
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl mx-auto mt-4">
-      {[
-        { name: 'Free', price: '$0', desc: '5 jobs, 50 candidates', current: true },
-        { name: 'Pro', price: '$49', desc: 'Unlimited jobs & candidates' },
-        { name: 'Enterprise', price: '$199', desc: 'Custom integrations & SSO' },
-      ].map(plan => (
-        <div 
-          key={plan.name}
-          className={`p-4 rounded-xl border ${plan.current ? 'border-indigo-200 bg-indigo-50/50' : 'border-gray-100 bg-gray-50/50 opacity-60'}`}
-        >
-          <p className="text-sm font-bold text-gray-900">{plan.name}</p>
-          <p className="text-2xl font-black text-indigo-600 my-1">{plan.price}<span className="text-xs text-gray-400 font-normal">/mo</span></p>
-          <p className="text-xs text-gray-500">{plan.desc}</p>
-          {plan.current && (
-            <span className="inline-block mt-2 text-[10px] font-bold bg-indigo-600 text-white px-2 py-0.5 rounded-full">
-              Current Plan
-            </span>
-          )}
-        </div>
-      ))}
-    </div>
-    <p className="text-xs text-gray-400 mt-6">You'll be notified when paid plans become available.</p>
-  </div>
-);
-
 // ─── Main Page ───────────────────────────────────────────────
 
 const SettingsPage = () => {
@@ -251,7 +211,6 @@ const SettingsPage = () => {
   const initialTab = searchParams.get('tab') || 'company';
   const [activeTab, setActiveTab] = useState(initialTab);
 
-  // Switch tab when ?tab= changes (e.g. from OAuth redirect)
   useEffect(() => {
     const tab = searchParams.get('tab');
     if (tab) setActiveTab(tab);
@@ -270,7 +229,6 @@ const SettingsPage = () => {
         <p className="text-gray-500 mt-1">Manage your account, company, and integrations.</p>
       </div>
       
-      {/* Tab Navigation */}
       <div className="flex overflow-x-auto border-b border-gray-200 mb-8 -mx-1">
         {tabs.map(tab => (
           <button
@@ -287,11 +245,10 @@ const SettingsPage = () => {
         ))}
       </div>
 
-      {/* Tab Content */}
       <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
         {activeTab === 'company' && <CompanyTab />}
         {activeTab === 'integrations' && <IntegrationsPage />}
-        {activeTab === 'billing' && <BillingTab />}
+        {activeTab === 'billing' && <BillingPage />}
       </div>
     </div>
   );

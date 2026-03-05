@@ -117,6 +117,38 @@ const UserSchema = new mongoose.Schema({
         refreshToken: String,
         tokenExpiry: Date,
       }
+    },
+    
+      integrations: {
+      google: {
+        googleId: String,
+        accessToken: String,
+        refreshToken: String,
+        tokenExpiry: Date,
+      },
+      linkedin: {
+        linkedinId: String,
+        accessToken: String,
+        refreshToken: String,
+        tokenExpiry: Date,
+      },
+      indeed: {
+        indeedId: String,
+        accessToken: String,
+        refreshToken: String,
+        tokenExpiry: Date,
+      }
+    },
+
+    // ── Billing / Subscription ──
+    subscription: {
+      plan: { type: String, enum: ['free', 'pro', 'enterprise'], default: 'free' },
+      status: { type: String, enum: ['active', 'past_due', 'cancelled', 'expired'], default: 'active' },
+      lsSubscriptionId: String,
+      lsCustomerId: String,
+      currentPeriodEnd: Date,
+      cancelAtPeriodEnd: { type: Boolean, default: false },
+      updatedAt: Date
     }
 
 });

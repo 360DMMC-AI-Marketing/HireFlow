@@ -8,16 +8,21 @@ export function useInterview(sessionId, token) {
   const [currentQuestion, setCurrentQuestion] = useState('');
   const [transcript, setTranscript] = useState('');
   const [isConnected, setIsConnected] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   const [error, setError] = useState(null);
 
   const socketRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const processorRef = useRef(null);
   const sourceRef = useRef(null);
+  const stateRef = useRef('idle');
+  const interviewStartedRef = useRef(false);
 
-  // ── Stop mic — must be defined before useEffect that references it ──
+  // Keep stateRef in sync so reconnect handler knows current state
+  useEffect(() => { stateRef.current = state; }, [state]);
+
+  // ── Stop mic ──
   const stopMicCapture = useCallback(() => {
-    // Disconnect audio processing graph
     if (sourceRef.current) {
       try { sourceRef.current.disconnect(); } catch (e) { /* ignore */ }
       sourceRef.current = null;
@@ -31,7 +36,6 @@ export function useInterview(sessionId, token) {
       } catch (e) { /* ignore */ }
       processorRef.current = null;
     }
-    // Release mic
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach(t => t.stop());
       mediaStreamRef.current = null;
@@ -42,24 +46,59 @@ export function useInterview(sessionId, token) {
     const API = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
     const socket = io(`${API}/interview`, {
       auth: { token },
-      transports: ['websocket']
+      transports: ['websocket'],
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 8000
     });
 
     socket.on('connect', () => {
       console.log('[Socket] Connected');
       setIsConnected(true);
+      setIsReconnecting(false);
+      setError(null);
       socket.emit('join-interview', { sessionId });
+
+      // If interview was already running, ask server to restore state
+      if (interviewStartedRef.current && stateRef.current !== 'done') {
+        console.log('[Socket] Reconnected mid-interview, requesting state restore');
+        socket.emit('restore-state', { sessionId });
+      }
     });
-    socket.on('disconnect', () => setIsConnected(false));
+
+    socket.on('disconnect', (reason) => {
+      console.log('[Socket] Disconnected:', reason);
+      setIsConnected(false);
+      // Only show reconnecting if interview is active
+      if (interviewStartedRef.current && stateRef.current !== 'done') {
+        setIsReconnecting(true);
+      }
+    });
+
+    socket.on('reconnect_attempt', (attempt) => {
+      console.log(`[Socket] Reconnect attempt ${attempt}/10`);
+      setIsReconnecting(true);
+    });
+
+    socket.on('reconnect_failed', () => {
+      console.error('[Socket] All reconnection attempts failed');
+      setIsReconnecting(false);
+      setError('Connection lost. Please check your internet and refresh the page.');
+    });
+
     socket.on('connect_error', (err) => {
       console.error('[Socket] Connection error:', err.message);
-      setError('Connection failed: ' + err.message);
+      if (!isConnected) {
+        setError('Connection failed: ' + err.message);
+      }
     });
 
     // ── State changes ──
     socket.on('interview-state', ({ state: s, questionIndex: qi, totalQuestions: tq, questionText: qt }) => {
       console.log('[Interview] State:', s, qi !== undefined ? `Q${qi + 1}` : '');
       setState(s);
+      if (s !== 'idle' && s !== 'done') interviewStartedRef.current = true;
       if (qi !== undefined) setQuestionIndex(qi);
       if (tq !== undefined) setTotalQuestions(tq);
       if (qt) { setCurrentQuestion(qt); setTranscript(''); }
@@ -98,7 +137,6 @@ export function useInterview(sessionId, token) {
     });
 
     // ── Server says: start sending mic audio ──
-    // CRITICAL: kill previous mic FIRST to prevent overlapping AudioContexts
     socket.on('start-sending-audio', () => {
       console.log('[Mic] Server requested audio stream');
       stopMicCapture();
@@ -114,6 +152,7 @@ export function useInterview(sessionId, token) {
     socket.on('interview-complete', () => {
       stopMicCapture();
       setState('done');
+      interviewStartedRef.current = false;
     });
     socket.on('interview-error', ({ message }) => {
       console.error('[Interview] Error:', message);
@@ -137,7 +176,6 @@ export function useInterview(sessionId, token) {
       });
       mediaStreamRef.current = stream;
 
-      // Don't force sampleRate — browser ignores it. Use native rate and resample.
       const actx = new AudioContext();
       const nativeSR = actx.sampleRate;
       const targetSR = 16000;
@@ -156,7 +194,6 @@ export function useInterview(sessionId, token) {
       processor.onaudioprocess = (e) => {
         const f32 = e.inputBuffer.getChannelData(0);
 
-        // Resample from native rate (usually 48000) to 16000
         const outputLength = Math.floor(f32.length / ratio);
         const resampled = new Float32Array(outputLength);
         for (let i = 0; i < outputLength; i++) {
@@ -164,13 +201,11 @@ export function useInterview(sessionId, token) {
           resampled[i] = f32[Math.min(srcIdx, f32.length - 1)];
         }
 
-        // Convert Float32 -> Int16 (PCM16 linear)
         const i16 = new Int16Array(resampled.length);
         for (let i = 0; i < resampled.length; i++) {
           i16[i] = Math.max(-32768, Math.min(32767, Math.round(resampled[i] * 32767)));
         }
 
-        // Log first few chunks with audio level
         if (audioChunkCount < 3) {
           let maxVal = 0;
           for (let i = 0; i < i16.length; i++) {
@@ -192,11 +227,15 @@ export function useInterview(sessionId, token) {
       setError('Microphone access failed');
     }
   }
-  const startInterview = useCallback(() =>
-    socketRef.current?.emit('start-interview', { sessionId }), [sessionId]);
+
+  const startInterview = useCallback(() => {
+    interviewStartedRef.current = true;
+    socketRef.current?.emit('start-interview', { sessionId });
+  }, [sessionId]);
 
   const endInterview = useCallback(() => {
     socketRef.current?.emit('end-interview', { sessionId });
+    interviewStartedRef.current = false;
     stopMicCapture();
   }, [sessionId, stopMicCapture]);
 
@@ -205,6 +244,6 @@ export function useInterview(sessionId, token) {
 
   return {
     state, questionIndex, totalQuestions, currentQuestion, transcript,
-    isConnected, error, startInterview, endInterview, sendAttentionData
+    isConnected, isReconnecting, error, startInterview, endInterview, sendAttentionData
   };
 }

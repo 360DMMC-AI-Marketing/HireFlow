@@ -14,6 +14,23 @@ class InterviewFlowManager {
   }
 
   // ─────────────────────────────────────────────────
+  // RECONNECTION SUPPORT
+  // ─────────────────────────────────────────────────
+  replaceSocket(newSocket) {
+    this.socket = newSocket;
+    console.log(`[Flow] Socket replaced for session ${this.sessionId}`);
+  }
+
+  getCurrentState() {
+    return {
+      state: this._lastEmittedState || 'idle',
+      questionIndex: this._lastQuestionIndex || 0,
+      totalQuestions: this._lastTotalQuestions || 0,
+      questionText: this._lastQuestionText || ''
+    };
+  }
+
+  // ─────────────────────────────────────────────────
   // START
   // ─────────────────────────────────────────────────
   async start() {
@@ -26,7 +43,7 @@ class InterviewFlowManager {
     session.currentState = 'greeting';
     await session.save();
 
-    this.socket.emit('interview-state', { state: 'greeting' });
+    this._emitState({ state: 'greeting' });
 
     const jobTitle = session.jobId?.title || 'this position';
     const greeting = `Hello! Welcome to your interview for ${jobTitle}. ` +
@@ -53,7 +70,7 @@ class InterviewFlowManager {
     session.currentState = 'asking';
     await session.save();
 
-    this.socket.emit('interview-state', {
+    this._emitState({
       state: 'asking',
       questionIndex: idx,
       totalQuestions: session.questions.length,
@@ -64,7 +81,7 @@ class InterviewFlowManager {
 
     session.currentState = 'listening';
     await session.save();
-    this.socket.emit('interview-state', { state: 'listening', questionIndex: idx });
+    this._emitState({ state: 'listening', questionIndex: idx });
 
     await this.startListening(session._id, idx);
   }
@@ -131,7 +148,7 @@ class InterviewFlowManager {
       session.currentQuestionIndex += 1;
       session.currentState = 'processing';
       await session.save();
-      this.socket.emit('interview-state', { state: 'processing' });
+      this._emitState({ state: 'processing' });
 
       // Only say "let's move on" if more questions remain
       if (session.currentQuestionIndex < session.questions.length) {
@@ -168,13 +185,11 @@ class InterviewFlowManager {
       session.currentQuestionIndex += 1;
       session.currentState = 'processing';
       await session.save();
-      this.socket.emit('interview-state', { state: 'processing' });
+      this._emitState({ state: 'processing' });
 
-      // Use different acks depending on whether more questions remain
       const isLastQuestion = session.currentQuestionIndex >= session.questions.length;
 
       if (isLastQuestion) {
-        // Last question — no "next question" or "let's move on"
         const lastAcks = [
           'Thank you for that response.',
           'Great, thank you.',
@@ -183,7 +198,6 @@ class InterviewFlowManager {
         const ack = lastAcks[Math.floor(Math.random() * lastAcks.length)];
         await streamTTSToSocket(ack, this.socket);
       } else {
-        // More questions coming
         const acks = [
           'Thank you for that response.',
           'Great, thank you.',
@@ -223,7 +237,7 @@ class InterviewFlowManager {
     const session = await AIInterviewSession.findById(this.sessionId);
     session.currentState = 'closing';
     await session.save();
-    this.socket.emit('interview-state', { state: 'closing' });
+    this._emitState({ state: 'closing' });
 
     const closing = 'That concludes our interview. Thank you for your time ' +
       'and thoughtful responses. You\'ll hear back from the team soon. Have a great day!';
@@ -235,7 +249,7 @@ class InterviewFlowManager {
     session.duration = (session.completedAt - session.startedAt) / 1000;
     await session.save();
 
-    this.socket.emit('interview-state', { state: 'done' });
+    this._emitState({ state: 'done' });
     this.socket.emit('interview-complete', { sessionId: this.sessionId });
 
     const { aiAnalysisQueue } = await import('../jobs/aiInterviewJobs.js');
@@ -245,7 +259,7 @@ class InterviewFlowManager {
   // ─────────────────────────────────────────────────
   // AUDIO — pipe from frontend → Deepgram
   // ─────────────────────────────────────────────────
-    receiveAudio(audioData) {
+  receiveAudio(audioData) {
     if (!this.audioChunkCount) this.audioChunkCount = 0;
     this.audioChunkCount++;
 
@@ -269,17 +283,29 @@ class InterviewFlowManager {
   }
 
   // ─────────────────────────────────────────────────
+  // STATE TRACKING HELPER
+  // ─────────────────────────────────────────────────
+  _emitState(data) {
+    if (data.state) this._lastEmittedState = data.state;
+    if (data.questionIndex !== undefined) this._lastQuestionIndex = data.questionIndex;
+    if (data.totalQuestions !== undefined) this._lastTotalQuestions = data.totalQuestions;
+    if (data.questionText) this._lastQuestionText = data.questionText;
+    this.socket.emit('interview-state', data);
+  }
+
+  // ─────────────────────────────────────────────────
   // CLEANUP
   // ─────────────────────────────────────────────────
-   cleanupListening() {
+  cleanupListening() {
     if (this.sttConnection) {
       try { this.sttConnection.close(); } catch (e) { /* ignore */ }
       this.sttConnection = null;
     }
     if (this.silenceTimer) { clearTimeout(this.silenceTimer); this.silenceTimer = null; }
     if (this.noSpeechTimer) { clearTimeout(this.noSpeechTimer); this.noSpeechTimer = null; }
-    this.audioChunkCount = 0;  // ← add this line
+    this.audioChunkCount = 0;
   }
+
   destroy() {
     this.cleanupListening();
   }

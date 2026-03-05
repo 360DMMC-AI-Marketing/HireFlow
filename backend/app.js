@@ -1,8 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import helmet from 'helmet'; // 1️⃣ SECURITY: HTTP Headers
-import mongoSanitize from 'express-mongo-sanitize'; // 2️⃣ SECURITY: Prevent NoSQL Injection
-import { rateLimit } from 'express-rate-limit'; // 3️⃣ SECURITY: Prevent Brute Force
+import helmet from 'helmet';
 import passport from 'passport';
 import authRoutes from './routes/authRoutes.js';
 import jobsRouter from './routes/jobs.js';
@@ -28,16 +26,18 @@ import { fileURLToPath } from 'url';
 // ── Phase 3: AI Interview route ──
 import aiInterviewRoutes from './routes/aiInterviews.js';
 
+// ── Phase 4: Security middleware ──
+import { mongoSanitize, xssSanitize, depthGuard } from './middleware/sanitize.js';
+import { authLimiter, apiLimiter, uploadLimiter } from './middleware/rateLimiters.js';
+
 dotenv.config();
 
 const app = express();
 
-
 // ============================================================
-// 🌐 CORS CONFIGURATION (Must be first!)
+// 🌐 CORS CONFIGURATION
 // ============================================================
 
-// CORS configuration - Applied BEFORE security middleware to handle preflight requests
 const allowedOrigins = [
     'http://localhost:5173',
     'http://localhost:5174',
@@ -48,7 +48,6 @@ const allowedOrigins = [
 
 const corsOptions = {
     origin: (origin, callback) => {
-        // Allow requests with no origin (like mobile apps, curl, postman)
         if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
@@ -59,7 +58,7 @@ const corsOptions = {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     exposedHeaders: ['Content-Range', 'X-Content-Range'],
-    maxAge: 600 // Cache preflight requests for 10 minutes
+    maxAge: 600
 };
 
 app.use(cors(corsOptions));
@@ -68,55 +67,58 @@ app.use(cors(corsOptions));
 // 🔒 SECURITY MIDDLEWARE
 // ============================================================
 
-// 1. Helmet: Set security HTTP headers (hides "Express" info, blocks malicious scripts)
+// 1. Helmet: Security HTTP headers
 app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
-    contentSecurityPolicy: false, // Disable CSP in dev to allow iframe resume viewer
-    frameguard: false // Allow iframe embedding for resume viewer
+    contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com"],
+            imgSrc: ["'self'", "data:", "https://ui-avatars.com", "https://*.amazonaws.com"],
+            connectSrc: ["'self'", "wss:", "https://api.deepgram.com", "https://api.elevenlabs.io"],
+            frameSrc: ["'self'"]
+        }
+    } : false,
+    frameguard: process.env.NODE_ENV === 'production' ? { action: 'deny' } : false
 }));
 
-// 2. Rate Limiting: Limit requests from the same IP
-// More lenient in development, stricter in production
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: process.env.NODE_ENV === 'production' ? 200 : 50000, // 50000 for dev (essentially unlimited), 200 for production
-    message: { error: 'Too many requests, please try again after 15 minutes' },
-    standardHeaders: 'draft-7', // Updated for Express 5 compatibility
-    legacyHeaders: false,
-    skipSuccessfulRequests: false,
-    validate: { xForwardedForHeader: false },
-    skip: (req) => {
-        // Skip rate limiting for health checks and in development
-        return req.path === '/health' || process.env.NODE_ENV === 'development';
-    }
-});
-app.use(limiter);
+// 2. Global rate limiter
+app.use(apiLimiter);
 
-// Body Parser Middleware (High limit for image uploads)
+// 3. Body parsers
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// 4. NoSQL injection prevention (custom, Express 5 compatible)
+app.use(mongoSanitize);
+
+// 5. XSS sanitization
+app.use(xssSanitize);
+
+// 6. Object depth/width guard (prevents prototype pollution)
+app.use(depthGuard(10, 500));
+
+// 7. Session
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'super_secret_hireflow_key', // You can add SESSION_SECRET to your .env later
-  resave: false,
-  saveUninitialized: false
+    secret: process.env.SESSION_SECRET || 'super_secret_hireflow_key',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
+    }
 }));
 
-// 3. Initialize Passport
+// 8. Passport
 app.use(passport.initialize());
 app.use(passport.session());
-// 3. Mongo Sanitize: Data Sanitization against NoSQL query injection
-// ⚠️ TEMPORARILY DISABLED - express-mongo-sanitize v2.2.0 is incompatible with Express 5
-// TODO: Re-enable when library is updated or switch to Express 4.x
-// app.use(mongoSanitize({
-//     replaceWith: '_',
-//     onSanitize: ({ req, key }) => {
-//         console.warn(`⚠️  Sanitized potentially malicious key: ${key}`);
-//     }
-// }));
 
 // ============================================================
-// 📁 STATIC FILE SERVING (interview recordings)
+// 📁 STATIC FILE SERVING
 // ============================================================
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -126,7 +128,10 @@ app.use('/uploads', express.static(path.join(__dirname, 'assets', 'uploads')));
 // 🛣️ ROUTES
 // ============================================================
 
-app.use('/api/auth', authRoutes);
+// Auth routes with strict rate limiting
+app.use('/api/auth', authLimiter, authRoutes);
+
+// Standard API routes
 app.use('/api/jobs', jobsRouter);
 app.use('/api/integrations', integrationsRouter);
 app.use('/api/user', userRouter);
@@ -142,9 +147,10 @@ app.use('/api/emails', emailsRouter);
 app.use('/api/email-templates', emailTemplatesRouter);
 app.use('/api/schedule', scheduleRouter);
 
-// ── Phase 3: AI Video Interview endpoints ──
+// Phase 3: AI Video Interview endpoints
 app.use('/api/v1/ai-interviews', aiInterviewRoutes);
-app.use('/api/ai-interviews', aiInterviewRoutes);  
+app.use('/api/ai-interviews', aiInterviewRoutes);
+
 // Health check
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'OK', message: 'Server is running' });

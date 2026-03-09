@@ -17,6 +17,7 @@ import teamRouter from './routes/team.js';
 import emailsRouter from './routes/emails.js';
 import emailTemplatesRouter from './routes/email-templates.js';
 import scheduleRouter from './routes/schedule.js';
+import auditLogRouter from './routes/auditLog.js';
 import errorHandler from './middleware/errorHandler.js';
 import session from 'express-session';
 import dotenv from 'dotenv';
@@ -155,6 +156,8 @@ app.use('/api/ai-interviews', aiInterviewRoutes);
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'OK', message: 'Server is running' });
 });
+
+app.use('/api/audit-log', auditLogRouter);
 
 // 404 handler
 app.use((req, res) => {

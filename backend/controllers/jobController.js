@@ -1,6 +1,7 @@
 import Job from '../models/job.js';
 import Candidate from '../models/candidate.js';
 import Groq from 'groq-sdk';
+import { audit } from '../services/auditService.js';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
@@ -87,12 +88,12 @@ export const createJob = async (req, res) => {
     }
     
     const newJob = await Job.create(jobData);
+    await audit(req, 'job_created', 'job', newJob._id, newJob.title, `Created job: ${newJob.title}`);
     res.status(201).json(newJob);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
 };
-
 // @desc    Update job
 // @route   PATCH /api/jobs/:id
 export const updateJob = async (req, res) => {

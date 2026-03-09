@@ -34,13 +34,13 @@ HireFlow is a full-stack hiring platform that allows recruiters and admins to po
 
 ## Tech Stack
 
-| Layer     | Technology        |
-|-----------|-------------------|
-| Runtime   | Node.js           |
-| Framework | Express.js        |
+| Layer     | Technology            |
+|-----------|-----------------------|
+| Runtime   | Node.js               |
+| Framework | Express.js            |
 | Auth      | JWT (JSON Web Tokens) |
-| Database  | MongoDB           |
-| Routing   | Express Router    |
+| Database  | MongoDB               |
+| Routing   | Express Router        |
 
 ---
 
@@ -81,31 +81,31 @@ HireFlow is a full-stack hiring platform that allows recruiters and admins to po
 
 ### Public Routes *(No authentication required)*
 
-| Method | Endpoint          | Description              |
-|--------|-------------------|--------------------------|
-| GET    | `/jobs`           | Get all job listings     |
-| GET    | `/jobs/:id`       | Get a specific job       |
-| GET    | `/jobs/indeed-feed` | Indeed XML feed (crawled by Indeed) |
+| Method | Endpoint            | Description                          |
+|--------|---------------------|--------------------------------------|
+| GET    | `/jobs`             | Get all job listings                 |
+| GET    | `/jobs/:id`         | Get a specific job                   |
+| GET    | `/jobs/indeed-feed` | Indeed XML feed (crawled by Indeed)  |
 
 ### Protected Routes *(Authentication required)*
 
-| Method | Endpoint          | Role Required            | Description              |
-|--------|-------------------|--------------------------|--------------------------|
-| POST   | `/jobs`           | Admin, Recruiter         | Create a new job         |
-| PATCH  | `/jobs/:id`       | Admin, Recruiter         | Update a job             |
-| DELETE | `/jobs/:id`       | Admin, Recruiter         | Delete a job             |
-| PATCH  | `/jobs/:id/status`| Admin, Recruiter         | Update job status        |
+| Method | Endpoint           | Role Required    | Description       |
+|--------|--------------------|------------------|-------------------|
+| POST   | `/jobs`            | Admin, Recruiter | Create a new job  |
+| PATCH  | `/jobs/:id`        | Admin, Recruiter | Update a job      |
+| DELETE | `/jobs/:id`        | Admin, Recruiter | Delete a job      |
+| PATCH  | `/jobs/:id/status` | Admin, Recruiter | Update job status |
 
 ### Distribution Routes *(Authentication required)*
 
-| Method | Endpoint                          | Description                   |
-|--------|-----------------------------------|-------------------------------|
-| POST   | `/jobs/:id/distribute`            | Distribute job to all platforms |
-| POST   | `/jobs/:id/distribute/linkedin`   | Post job to LinkedIn          |
-| DELETE | `/jobs/:id/distribute/linkedin`   | Remove job from LinkedIn      |
-| POST   | `/jobs/:id/distribute/indeed`     | Post job to Indeed            |
-| DELETE | `/jobs/:id/distribute/indeed`     | Remove job from Indeed        |
-| GET    | `/jobs/:id/distribute/status`     | Get distribution status       |
+| Method | Endpoint                        | Description                      |
+|--------|---------------------------------|----------------------------------|
+| POST   | `/jobs/:id/distribute`          | Distribute job to all platforms  |
+| POST   | `/jobs/:id/distribute/linkedin` | Post job to LinkedIn             |
+| DELETE | `/jobs/:id/distribute/linkedin` | Remove job from LinkedIn         |
+| POST   | `/jobs/:id/distribute/indeed`   | Post job to Indeed               |
+| DELETE | `/jobs/:id/distribute/indeed`   | Remove job from Indeed           |
+| GET    | `/jobs/:id/distribute/status`   | Get distribution status          |
 
 ---
 
@@ -113,11 +113,11 @@ HireFlow is a full-stack hiring platform that allows recruiters and admins to po
 
 HireFlow uses **JWT-based authentication** with role-based access control.
 
-| Role        | Permissions                              |
-|-------------|------------------------------------------|
-| `admin`     | Full access to all features              |
-| `recruiter` | Create, edit, delete, and distribute jobs|
-| `applicant` | View job listings only                   |
+| Role        | Permissions                               |
+|-------------|-------------------------------------------|
+| `admin`     | Full access to all features               |
+| `recruiter` | Create, edit, delete, and distribute jobs |
+| `applicant` | View job listings only                    |
 
 ---
 
